@@ -1,5 +1,27 @@
-// ─── TILE THEMES ──────────────────────────────────────────────────────────────
-export const TILE_THEMES = {
+// --- TILE THEMES --------------------------------------------------------------
+import type { TileCategory } from '../data/tiles';
+import type { TileThemeKey } from '../data/settings';
+
+export type TileTheme = {
+  label: string;
+  emoji: string;
+  desc: string;
+  preview: string[];
+  pageBg: string;
+  pageText: string;
+  pageBgImage: boolean;
+  tileBg: (cat: TileCategory, selected: boolean) => string;
+  tileBorder: (cat: TileCategory, selected: boolean) => string;
+  tileText: (cat: TileCategory, selected: boolean) => string;
+  tileShadow: (cat: TileCategory, selected: boolean, highlighted: boolean) => string;
+  labelColor: (cat: TileCategory) => string;
+  cardBg: string;
+  cardBorder: string;
+  headerBg: string;
+  headerBorder: string;
+};
+
+export const TILE_THEMES: Record<TileThemeKey, TileTheme> = {
   neon: {
     label: "Neon",
     emoji: "🌙",
@@ -68,14 +90,14 @@ export const TILE_THEMES = {
     tileBorder: (cat, selected) => selected
       ? `2.5px solid ${cat.color}`
       : `2px solid ${cat.color}cc`,
-    tileText: (cat, selected) => {
+    tileText: (cat, _selected) => {
       // Darken each category colour significantly for ink-on-paper legibility
-      const darkMap = {
+      const darkMap: Record<string, string> = {
         "#E84855": "#8a000a", "#F4A261": "#7a3a00", "#2EC4B6": "#006b5a",
         "#CBF3F0": "#005a50", "#FFBF69": "#7a4a00", "#C77DFF": "#5a0090",
         "#9EF01A": "#3a7000",
       };
-      return darkMap[cat.color] || "#1a1208";
+      return darkMap[cat.color] ?? "#1a1208";
     },
     tileShadow: (cat, selected, highlighted) => selected
       ? `0 6px 16px ${cat.color}55, 0 2px 0 ${cat.color}88`
@@ -83,12 +105,12 @@ export const TILE_THEMES = {
       ? `0 0 0 2.5px #d4a020, 0 4px 12px #d4a02033`
       : `0 2px 0 ${cat.color}55, 0 3px 8px #00000018`,
     labelColor: (cat) => {
-      const darkMap = {
+      const darkMap: Record<string, string> = {
         "#E84855": "#8a000a", "#F4A261": "#7a3a00", "#2EC4B6": "#006b5a",
         "#CBF3F0": "#005a50", "#FFBF69": "#7a4a00", "#C77DFF": "#5a0090",
         "#9EF01A": "#3a7000",
       };
-      return darkMap[cat.color] || "#1a1208";
+      return darkMap[cat.color] ?? "#1a1208";
     },
     cardBg: "#ffffff",
     cardBorder: "#d0c8b8",

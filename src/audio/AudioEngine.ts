@@ -1,49 +1,64 @@
-// ─── AUDIO ENGINE ─────────────────────────────────────────────────────────────
-export const AudioEngine = (() => {
-  // ─────────────────────────────────────────────────────────────────────────
+// --- AUDIO ENGINE -------------------------------------------------------------
+type SoundName =
+  | 'tileClick' | 'tileCycle' | 'wordCorrect' | 'wordWrong' | 'roundEnd'
+  | 'gameStart' | 'timeUp' | 'timerTick' | 'modeSelect' | 'menuClick'
+  | 'modalOpen' | 'modalClose' | 'backToMenu' | 'dealTiles' | 'hintReveal'
+  | 'resetGame' | 'sessionEnd';
+
+export interface AudioEngineAPI {
+  unlock(): void;
+  play(name: SoundName): void;
+  startMusic(): void;
+  stopMusic(): void;
+  setSfxVolume(v: number): void;
+  setMusicVolume(v: number): void;
+}
+
+export const AudioEngine: AudioEngineAPI = (() => {
+  // -------------------------------------------------------------------------
   // Browser autoplay policy: AudioContext MUST be created inside a user
   // gesture handler (click / keydown).  We defer everything until unlock().
-  // Stackblitz iframes are extra-strict — we also play a silent buffer on
+  // Stackblitz iframes are extra-strict - we also play a silent buffer on
   // first interaction to force the context out of "suspended" state.
-  // ─────────────────────────────────────────────────────────────────────────
-  let ctx          = null;
-  let sfxBus       = null;   // gain node all SFX route through
-  let musicNodes   = null;   // { master, intervalId }
+  // -------------------------------------------------------------------------
+  let ctx: AudioContext | null          = null;
+  let sfxBus: GainNode | null          = null;
+  let musicNodes: { master: GainNode; intervalId: ReturnType<typeof setInterval> } | null = null;
   let musicRunning = false;
   let unlocked     = false;
   let pendingMusic = false;  // startMusic() called before unlock?
   let sfxVol       = 0.5;
   let musicVol     = 0.5;
 
-  // ── Create / resume context (only ever called post-gesture) ───────────────
+  // -- Create / resume context (only ever called post-gesture) ---------------
   const boot = () => {
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return true; }
     try {
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     } catch(e) { return false; }
     // Build SFX bus
     sfxBus = ctx.createGain();
     sfxBus.gain.value = sfxVol;
     sfxBus.connect(ctx.destination);
-    // Play a zero-length silent buffer — forces "suspended→running" in Chrome
+    // Play a zero-length silent buffer - forces "suspended→running" in Chrome
     const sil = ctx.createBuffer(1, 1, 22050);
     const src = ctx.createBufferSource();
     src.buffer = sil; src.connect(ctx.destination); src.start(0);
     return true;
   };
 
-  // ── Public: call on first click anywhere in the app ───────────────────────
+  // -- Public: call on first click anywhere in the app -----------------------
   const unlock = () => {
     if (unlocked) return;
     if (!boot()) return;
-    ctx.resume().then(() => {
+    ctx!.resume().then(() => {
       unlocked = true;
       if (pendingMusic && musicVol > 0) { pendingMusic = false; _startMusicNow(); }
     });
   };
 
-  // ── Primitive builders (safe — return early if not ready) ─────────────────
-  const oscNote = (freq, type, t0, dur, vol) => {
+  // -- Primitive builders (safe - return early if not ready) -----------------
+  const oscNote = (freq: number, type: OscillatorType, t0: number, dur: number, vol: number) => {
     if (!unlocked || !ctx || !sfxBus) return;
     const g = ctx.createGain();
     g.gain.setValueAtTime(vol, ctx.currentTime + t0);
@@ -54,7 +69,7 @@ export const AudioEngine = (() => {
     o.connect(g); o.start(ctx.currentTime + t0); o.stop(ctx.currentTime + t0 + dur + 0.06);
   };
 
-  const noiseBlip = (t0, dur, vol) => {
+  const noiseBlip = (t0: number, dur: number, vol: number) => {
     if (!unlocked || !ctx || !sfxBus) return;
     const len = Math.max(1, Math.ceil(ctx.sampleRate * dur));
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -68,7 +83,7 @@ export const AudioEngine = (() => {
     s.start(ctx.currentTime + t0); s.stop(ctx.currentTime + t0 + dur + 0.06);
   };
 
-  const sweep = (f0, f1, dur, vol, type = 'sine') => {
+  const sweep = (f0: number, f1: number, dur: number, vol: number, type: OscillatorType = 'sine') => {
     if (!unlocked || !ctx || !sfxBus) return;
     const o = ctx.createOscillator(); o.type = type;
     o.frequency.setValueAtTime(f0, ctx.currentTime);
@@ -80,7 +95,7 @@ export const AudioEngine = (() => {
     o.start(); o.stop(ctx.currentTime + dur + 0.08);
   };
 
-  // ── Sound library ──────────────────────────────────────────────────────────
+  // -- Sound library ----------------------------------------------------------
   const sounds = {
     tileClick()   { noiseBlip(0,0.035,0.22); oscNote(240,'sine',0,0.065,0.12); },
     tileCycle()   { oscNote(880,'sine',0,0.10,0.13); oscNote(1100,'sine',0.06,0.09,0.09); },
@@ -101,7 +116,7 @@ export const AudioEngine = (() => {
     sessionEnd()  { [392,494,523,659,784].forEach((f,i)=>oscNote(f,'sine',i*0.10,0.45,0.18)); noiseBlip(0.35,0.30,0.06); },
   };
 
-  // ── Ambient music ──────────────────────────────────────────────────────────
+  // -- Ambient music ----------------------------------------------------------
   const PENTA = [261.63,293.66,329.63,392.00,440.00,523.25,587.33,659.26];
   const BASS  = [65.41,73.42,82.41,98.00];
 
@@ -116,8 +131,8 @@ export const AudioEngine = (() => {
     const fb  = ctx.createGain(); fb.gain.value = 0.32;
     const wet = ctx.createGain(); wet.gain.value = 0.38;
     dly.connect(fb); fb.connect(dly); dly.connect(wet); wet.connect(master);
-    const pn = (freq, time, dur, vol, type='sine') => {
-      if (!musicRunning) return;
+    const pn = (freq: number, time: number, dur: number, vol: number, type: OscillatorType = 'sine') => {
+      if (!musicRunning || !ctx) return;
       const g = ctx.createGain();
       g.gain.setValueAtTime(0, ctx.currentTime+time);
       g.gain.linearRampToValueAtTime(vol, ctx.currentTime+time+0.05);
@@ -152,11 +167,11 @@ export const AudioEngine = (() => {
     if (!musicNodes) { musicRunning = false; return; }
     musicRunning = false;
     clearInterval(musicNodes.intervalId);
-    try { musicNodes.master.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.8); } catch(e){}
+    try { musicNodes.master.gain.linearRampToValueAtTime(0, ctx!.currentTime + 1.8); } catch(e){}
     musicNodes = null;
   };
 
-  // ── Public API ─────────────────────────────────────────────────────────────
+  // -- Public API -------------------------------------------------------------
   return {
     unlock,
     play(name) { try { if (sfxVol > 0) sounds[name]?.(); } catch(e){} },
@@ -175,3 +190,4 @@ export const AudioEngine = (() => {
         musicNodes.master.gain.linearRampToValueAtTime(v * 0.12, ctx.currentTime + 0.3);
     },
   };
+})();

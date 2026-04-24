@@ -1,34 +1,27 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { TILE_CATEGORIES, getTileSound, buildDeck, shuffle, freshTileId, parseTile } from '../data/tiles.js';
-import { WORD_LIST, SESSION_CUSTOM_WORDS, checkWordInSet, buildWordFromTiles, addCustomWord } from '../data/words.js';
-import { DEFAULT_SETTINGS } from '../data/settings.js';
-import { TILE_THEMES } from '../themes/tileThemes.js';
-import { AudioEngine } from '../audio/AudioEngine.js';
-import { Tile } from '../components/Tile.jsx';
-import { CheerBurst } from '../components/CheerBurst.jsx';
-import { WordSmokeCanvas, makeSmokeWord, getWordsForSound } from '../components/WordSmokeCanvas.jsx';
-import { Modal } from '../components/Modal.jsx';
+import { TILE_CATEGORIES, getTileSound, buildDeck, shuffle, freshTileId, parseTile } from '../data/tiles';
+import { WORD_LIST, SESSION_CUSTOM_WORDS, checkWordInSet, buildWordFromTiles, addCustomWord } from '../data/words';
+import { DEFAULT_SETTINGS } from '../data/settings';
+import type { Settings } from '../data/settings';
+import { TILE_THEMES } from '../themes/tileThemes';
+import { AudioEngine } from '../audio/AudioEngine';
+import { Tile } from '../components/Tile';
+import type { Tile as TileData } from '../data/tiles';
+import { CheerBurst } from '../components/CheerBurst';
+import { WordSmokeCanvas, makeSmokeWord, getWordsForSound } from '../components/WordSmokeCanvas';
+import type { SmokeWordData } from '../components/WordSmokeCanvas';
+import { Modal } from '../components/Modal';
 
-function btnStyle(bg, darkBg, textColor) {
-  return {
-    padding: "8px 18px",
-    borderRadius: 9,
-    background: `linear-gradient(135deg, ${bg}33, ${bg}18)`,
-    border: `1px solid ${bg}66`,
-    color: textColor || bg,
-    fontSize: 12,
-    fontWeight: 700,
-    cursor: "pointer",
-    letterSpacing: "0.06em",
-    transition: "all 0.15s",
-  };
-}
+type ScoredWord = { tiles: TileData[]; word: string; pts: number; hinted: boolean; originalPts: number };
+type ChallengeWord = { word: string; tiles: TileData[] };
 
-export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
+type GameProps = { onBackToTitle: () => void; settings?: Settings };
+
+export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS }: GameProps) {
   const [deck, setDeck] = useState(() => shuffle(buildDeck()));
-  const [hand, setHand] = useState([]);
-  const [selected, setSelected] = useState([]);
-  const [words, setWords] = useState([]);
+  const [hand, setHand] = useState<TileData[]>([]);
+  const [selected, setSelected] = useState<TileData[]>([]);
+  const [words, setWords] = useState<ScoredWord[]>([]);
   const [message, setMessage] = useState({ text: "", type: "" });
   const [round, setRound] = useState(1);
   const [score, setScore] = useState(0);
@@ -38,28 +31,28 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
   const [invalidShake, setInvalidShake] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [dictReady, setDictReady] = useState(false);
-  const [gameOver, setGameOver] = useState(false);       // true when no words possible with 13 tiles
-  const [allWordsScored, setAllWordsScored] = useState([]); // cumulative across rounds for end screen
-  const [challengeWord, setChallengeWord] = useState(null); // { word, tiles } waiting for user to accept/reject
-  const loadedWordSet = useRef(null);
-  const msgTimeout = useRef(null);
+  const [gameOver, setGameOver] = useState(false);
+  const [allWordsScored, setAllWordsScored] = useState<ScoredWord[]>([]);
+  const [challengeWord, setChallengeWord] = useState<ChallengeWord | null>(null);
+  const loadedWordSet = useRef<Set<string> | null>(null);
+  const msgTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── WORD SMOKE ─────────────────────────────────────────────────────────────
+  // -- WORD SMOKE -------------------------------------------------------------
   const smokeEnabled = settings.smokeEffect;
-  const [cheerKey, setCheerKey] = useState(0); // increment to trigger a new cheer
-  const [smokeWords, setSmokeWords] = useState([]);
-  const spawnTimerRef = useRef(null);
-  const hoverTileRef = useRef(null);
-  const usedRecentlyRef = useRef(new Set());
+  const [cheerKey, setCheerKey] = useState(0);
+  const [smokeWords, setSmokeWords] = useState<SmokeWordData[]>([]);
+  const spawnTimerRef = useRef<{ interval: ReturnType<typeof setInterval> | null; t1: ReturnType<typeof setTimeout> | null; t2: ReturnType<typeof setTimeout> | null }>({ interval: null, t1: null, t2: null });
+  const hoverTileRef = useRef<TileData | null>(null);
+  const usedRecentlyRef = useRef(new Set<string>());
 
-  const removeWord = useCallback((id) => {
+  const removeWord = useCallback((id: number) => {
     setSmokeWords(prev => prev.filter(w => w.id !== id));
   }, []);
 
-  const handleTileHover = useCallback((tile, x, y) => {
-    clearInterval(spawnTimerRef.current);
-    clearTimeout(spawnTimerRef._t1);
-    clearTimeout(spawnTimerRef._t2);
+  const handleTileHover = useCallback((tile: TileData | null, x: number, y: number) => {
+    clearInterval(spawnTimerRef.current.interval ?? undefined);
+    clearTimeout(spawnTimerRef.current.t1 ?? undefined);
+    clearTimeout(spawnTimerRef.current.t2 ?? undefined);
     if (!tile || !smokeEnabled) { hoverTileRef.current = null; return; }
     hoverTileRef.current = tile;
 
@@ -71,23 +64,24 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
 
     const spawnOne = () => {
       if (!hoverTileRef.current) return;
-      let word;
+      let word: string | undefined;
       for (let i = 0; i < 12; i++) {
         word = wordPool[Math.floor(Math.random() * wordPool.length)];
         if (!usedRecentlyRef.current.has(word)) break;
       }
+      if (!word) return;
       usedRecentlyRef.current.add(word);
       if (usedRecentlyRef.current.size > 8) {
-        const first = usedRecentlyRef.current.values().next().value;
+        const first = usedRecentlyRef.current.values().next().value as string;
         usedRecentlyRef.current.delete(first);
       }
-      setSmokeWords(prev => [...prev.slice(-16), makeSmokeWord(word, x, y, color)]);
+      setSmokeWords(prev => [...prev.slice(-16), makeSmokeWord(word!, x, y, color)]);
     };
 
     spawnOne();
-    spawnTimerRef._t1 = setTimeout(() => { if (hoverTileRef.current) spawnOne(); }, 700);
-    spawnTimerRef._t2 = setTimeout(() => { if (hoverTileRef.current) spawnOne(); }, 1400);
-    spawnTimerRef.current = setInterval(spawnOne, 1100);
+    spawnTimerRef.current.t1 = setTimeout(() => { if (hoverTileRef.current) spawnOne(); }, 700);
+    spawnTimerRef.current.t2 = setTimeout(() => { if (hoverTileRef.current) spawnOne(); }, 1400);
+    spawnTimerRef.current.interval = setInterval(spawnOne, 1100);
   }, [smokeEnabled]);
 
   // Deal initial 13 tiles
@@ -108,18 +102,18 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
     AudioEngine.setSfxVolume(settings.soundEffects);
   }, [settings.soundEffects]);
 
-  const showMsg = (text, type = "info") => {
+  const showMsg = (text: string, type = "info") => {
     if (msgTimeout.current) clearTimeout(msgTimeout.current);
     setMessage({ text, type });
     msgTimeout.current = setTimeout(() => setMessage({ text: "", type: "" }), 3000);
   };
 
-  const toggleTile = (tile) => {
+  const toggleTile = (tile: TileData) => {
     if (settings.soundEffects > 0) AudioEngine.play("tileClick");
     setSelected(prev => {
       const already = prev.findIndex(t => t.id === tile.id);
       if (already !== -1) {
-        // deselect — remove only the first match (safety guard)
+        // deselect - remove only the first match (safety guard)
         return prev.filter((_, i) => i !== already);
       }
       // guard: never add duplicates (safety against double event fires)
@@ -143,11 +137,11 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
   };
 
   // Score a validated word (extracted so challenge flow can reuse it)
-  const scoreWord = (word, tiles) => {
+  const scoreWord = (word: string, tiles: TileData[]) => {
     if (settings.soundEffects > 0) AudioEngine.play("wordCorrect");
+    const catBonus: Record<string, number> = { specials: 5, r_vowel: 4, double_vowel: 3, others: 2, main_consonants: 1, open_vowel: 1, closed_vowel: 1 };
     const basePts = tiles.reduce((acc, t) => {
-      const catBonus = { specials: 5, r_vowel: 4, double_vowel: 3, others: 2, main_consonants: 1, open_vowel: 1, closed_vowel: 1 };
-      return acc + (catBonus[t.category] || 1);
+      return acc + (catBonus[t.category] ?? 1);
     }, 0) * word.length;
     const usedHint = settings.hintPenalty && showHint && hintUsedWords.has(word);
     const pts = usedHint ? Math.max(1, Math.floor(basePts / 2)) : basePts;
@@ -177,7 +171,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
 
   const clearSelection = () => { setSelected([]); };
 
-  // ── AUTO-MAKE WORD ─────────────────────────────────────────────────────────
+  // -- AUTO-MAKE WORD ---------------------------------------------------------
   // When autoMakeWord is on, check after every selection change: if the current
   // tiles already spell a valid word, score it automatically after a brief delay
   // so the player can see the selection before it fires.
@@ -190,9 +184,9 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, settings.autoMakeWord, dictReady, animating]);
   // Works on both hand tiles and already-selected tiles
-  const cycleVariant = (tile) => {
+  const cycleVariant = (tile: TileData) => {
     if (settings.soundEffects > 0) AudioEngine.play("tileCycle");
-    const cycle = (t) => {
+    const cycle = (t: TileData): TileData => {
       if (!t.variants) return t;
       if (t.id !== tile.id) return t;
       return { ...t, activeVariant: (t.activeVariant + 1) % t.variants.length };
@@ -201,7 +195,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
     setSelected(prev => prev.map(cycle));
   };
 
-  // ── RESET GAME ────────────────────────────────────────────────────────────
+  // -- RESET GAME ------------------------------------------------------------
   const resetGame = () => {
     if (settings.soundEffects > 0) AudioEngine.play("resetGame");
     const d = shuffle(buildDeck());
@@ -221,28 +215,28 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
     showMsg("🔄 Game reset! New tiles dealt.", "info");
   };
 
-  // ── HINT SYSTEM ────────────────────────────────────────────────────────────
+  // -- HINT SYSTEM ------------------------------------------------------------
   const MAX_HINTS = 3;
   const [hintsLeft, setHintsLeft] = useState(MAX_HINTS);
   const [showHint, setShowHint] = useState(false);
   const [hintLoading, setHintLoading] = useState(false);
-  const [highlightIds, setHighlightIds] = useState(new Set());
-  const [hintUsedWords, setHintUsedWords] = useState(new Set());
-  const [hintWords, setHintWords] = useState([]); // kept for compat with autoMakeWord effect
+  const [highlightIds, setHighlightIds] = useState(new Set<number>());
+  const [hintUsedWords, setHintUsedWords] = useState(new Set<string>());
+  const [hintWords, setHintWords] = useState<Array<{ word: string; tileIds: number[]; pts: number }>>([]);
   // Auto-pulse: IDs of tiles gently glowing right now (ambient short-word hint)
-  const [autoPulseIds, setAutoPulseIds] = useState(new Set());
-  const autoPulseTimerRef = useRef(null);
+  const [autoPulseIds, setAutoPulseIds] = useState(new Set<number>());
+  const autoPulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Score a candidate word given tile ids
-  const scoreCandidate = useCallback((tileIds) => {
-    const catBonus = { specials:5, r_vowel:4, double_vowel:3, others:2, main_consonants:1, open_vowel:1, closed_vowel:1 };
+  const scoreCandidate = useCallback((tileIds: number[]) => {
+    const catBonus: Record<string, number> = { specials:5, r_vowel:4, double_vowel:3, others:2, main_consonants:1, open_vowel:1, closed_vowel:1 };
     return tileIds.reduce((acc, id) => {
       const t = hand.find(h => h.id === id);
-      return acc + (t ? (catBonus[t.category] || 1) : 0);
+      return acc + (t ? (catBonus[t.category] ?? 1) : 0);
     }, 0);
   }, [hand]);
 
-  // Core matching helper — returns array of { word, tileIds, pts } from current hand
+  // Core matching helper - returns array of { word, tileIds, pts } from current hand
   const findAllCandidates = useCallback((maxLen = 99) => {
     // Build per-tile option lists (each tile can produce 1 or more sounds via variants)
     const tileSounds = hand.map(tile =>
@@ -251,13 +245,13 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
         : [{ sound: tile.text.replace(/-/g, ""), tile }]
     );
     const usedAlready = new Set(words.map(w => w.word));
-    const catBonus = { specials:5, r_vowel:4, double_vowel:3, others:2, main_consonants:1, open_vowel:1, closed_vowel:1 };
-    const found = [];
+    const catBonus: Record<string, number> = { specials:5, r_vowel:4, double_vowel:3, others:2, main_consonants:1, open_vowel:1, closed_vowel:1 };
+    const found: Array<{ word: string; tileIds: number[]; pts: number }> = [];
 
     // Backtracking matcher: tries every tile at every position so that
     // both d+oor AND d+o+or can match "door", and words like "answer"
     // are found even if an "an" tile could theoretically steal the match.
-    function matchWord(word, pos, usedFlags, tileIds) {
+    function matchWord(word: string, pos: number, usedFlags: boolean[], tileIds: number[]): { ok: boolean; tileIds: number[] } | null {
       if (pos === word.length) return { ok: true, tileIds: [...tileIds] };
       for (let i = 0; i < tileSounds.length; i++) {
         if (usedFlags[i]) continue;
@@ -266,13 +260,13 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
             usedFlags[i] = true;
             tileIds.push(tile.id);
             const result = matchWord(word, pos + sound.length, usedFlags, tileIds);
-            if (result.ok) return result;
+            if (result?.ok) return result;
             tileIds.pop();
             usedFlags[i] = false;
           }
         }
       }
-      return { ok: false };
+      return null;
     }
 
     for (const word of [...WORD_LIST, ...SESSION_CUSTOM_WORDS]) {
@@ -280,10 +274,10 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
       if (usedAlready.has(word)) continue;
       const usedFlags = new Array(tileSounds.length).fill(false);
       const result = matchWord(word, 0, usedFlags, []);
-      if (result.ok) {
+      if (result?.ok) {
         const pts = result.tileIds.reduce((acc, id) => {
           const t = hand.find(h => h.id === id);
-          return acc + (t ? (catBonus[t.category] || 1) : 0);
+          return acc + (t ? (catBonus[t.category] ?? 1) : 0);
         }, 0) * word.length;
         found.push({ word, tileIds: result.tileIds, pts });
       }
@@ -301,7 +295,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
       const candidates = findAllCandidates();
       if (candidates.length === 0) {
         setHintLoading(false);
-        showMsg("🤔 No words found — try cycling dual tiles!", "warn");
+        showMsg("🤔 No words found - try cycling dual tiles!", "warn");
         return;
       }
       // Pick the best-scoring word
@@ -315,16 +309,16 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
     }, 300);
   };
 
-  const highlightHintWord = (hint) => {
+  const highlightHintWord = (hint: { word: string; tileIds: number[] }) => {
     setHighlightIds(new Set(hint.tileIds));
     setHintUsedWords(prev => new Set([...prev, hint.word]));
     setTimeout(() => setHighlightIds(new Set()), 3500);
   };
 
-  // Legacy compat — kept so old calls still work
+  // Legacy compat - kept so old calls still work
   const highlightHint = highlightHintWord;
 
-  // ── AUTO-PULSE (ambient short-word glow) ───────────────────────────────────
+  // -- AUTO-PULSE (ambient short-word glow) -----------------------------------
   // Every 7–11 seconds, quietly illuminate 2–3 tiles that spell a short word
   // (≤4 chars). This costs nothing and gives a subtle nudge without spoiling.
   useEffect(() => {
@@ -342,18 +336,18 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
       }, jitter);
     };
     schedule();
-    return () => clearTimeout(autoPulseTimerRef.current);
+    return () => clearTimeout(autoPulseTimerRef.current ?? undefined);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hand, words, animating]);
 
-  // Check whether a given tile array can form ANY word — used to detect dead hands
-  const isDeadHand = useCallback((tiles) => {
+  // Check whether a given tile array can form ANY word - used to detect dead hands
+  const isDeadHand = useCallback((tiles: TileData[]) => {
     const tileSounds = tiles.map(tile =>
       tile.variants
         ? tile.variants.map(v => ({ sound: v, tile }))
         : [{ sound: tile.text.replace(/-/g, ""), tile }]
     );
-    function matchWord(word, pos, usedFlags) {
+    function matchWord(word: string, pos: number, usedFlags: boolean[]) {
       if (pos === word.length) return true;
       for (let i = 0; i < tileSounds.length; i++) {
         if (usedFlags[i]) continue;
@@ -408,7 +402,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
       setAnimating(false);
       if (settings.soundEffects > 0) AudioEngine.play("dealTiles");
       showMsg(`Round ${round + 1} begins! ${needed} new tiles dealt.`, "info");
-      // Check if new hand is a dead end — trigger end screen if so
+      // Check if new hand is a dead end - trigger end screen if so
       if (isDeadHand(newHand)) {
         setTimeout(() => {
           if (settings.soundEffects > 0) AudioEngine.play("sessionEnd");
@@ -543,7 +537,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
               1. You have 13 tiles in your hand<br/>
               2. Click tiles to select them in order<br/>
               3. Press <b style={{color:"#fff"}}>Make Word</b> to validate and score<br/>
-              4. Valid words score instantly — invalid ones clear so you can retry<br/>
+              4. Valid words score instantly - invalid ones clear so you can retry<br/>
               5. Build multiple words, then <b style={{color:"#fff"}}>End Round</b><br/>
               6. Used tiles are replaced with new ones
             </div>
@@ -551,7 +545,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#f0c060", marginBottom: 8 }}>✨ Scoring</div>
             <div style={{ fontSize: 12, lineHeight: 1.7, color: "#ffffff88" }}>
-              Points = word length × tile values<br/>
+              Points = word length x tile values<br/>
               Specials: 5pts | R-Vowel: 4pts<br/>
               Double Vowel: 3pts | Others: 2pts<br/>
               Consonants/Vowels: 1pt each<br/><br/>
@@ -593,7 +587,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
         </div>
       )}
 
-      {/* ── WORDS SCORED — Mahjong discard row, above the board ──────────────── */}
+      {/* -- WORDS SCORED - Mahjong discard row, above the board ---------------- */}
       <div style={{ padding: "16px 24px 0" }}>
         <div style={{
           background: "#ffffff05",
@@ -616,7 +610,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
               </div>
             )}
           </div>
-          {/* Word chips — rendered as their actual tiles */}
+          {/* Word chips - rendered as their actual tiles */}
           {words.length === 0 ? (
             <div style={{ color: "#ffffff18", fontSize: 12, fontStyle: "italic", paddingTop: 4 }}>
               Score words to see them appear here…
@@ -641,7 +635,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
         </div>
       </div>
 
-      {/* ── MAIN BOARD AREA ───────────────────────────────────────────────────── */}
+      {/* -- MAIN BOARD AREA ----------------------------------------------------- */}
       <div style={{ display: "flex", gap: 18, padding: "14px 24px 0", alignItems: "flex-start" }}>
 
         {/* Left: Word Builder + Hand */}
@@ -657,7 +651,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.16em", color: "#ffffff33" }}>
-                Word Builder {selected.length > 0 ? `— ${selected.length} tile${selected.length !== 1 ? "s" : ""}` : ""}
+                Word Builder {selected.length > 0 ? `- ${selected.length} tile${selected.length !== 1 ? "s" : ""}` : ""}
               </div>
               {/* Auto indicator */}
               <div style={{ fontSize: 10, color: settings.autoMakeWord ? "#9EF01A88" : "#ffffff22", letterSpacing: "0.1em", display: "flex", alignItems: "center", gap: 4 }}>
@@ -693,7 +687,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
                 <div style={{ flex: 1, fontFamily: "'Noto Serif SC', serif", color: "#f0c060", fontWeight: 800, fontSize: 22, letterSpacing: "0.04em" }}>
                   {selected.map(t => getTileSound(t)).join("")}
                 </div>
-                {/* Make Word button — only shown when autoMakeWord is off */}
+                {/* Make Word button - only shown when autoMakeWord is off */}
                 {!settings.autoMakeWord && (
                   <button onClick={makeWord} disabled={animating || !dictReady} style={{
                     ...btnStyle(!dictReady ? "#888" : "#9EF01A", !dictReady ? "#111" : "#0d1400"),
@@ -728,7 +722,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
               </div>
             )}
 
-            {/* ── Challenge Prompt — word not in built-in list ── */}
+            {/* -- Challenge Prompt - word not in built-in list -- */}
             {challengeWord && (
               <div style={{
                 marginTop: 12,
@@ -745,7 +739,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
                       "<span style={{ fontFamily: "'Noto Serif SC', serif" }}>{challengeWord.word}</span>" isn't in our list
                     </div>
                     <div style={{ fontSize: 11, color: "#ffffff55", lineHeight: 1.5, marginBottom: 10 }}>
-                      If it's a real word, you can add it to your session dictionary and score it — or clear and try something else.
+                      If it's a real word, you can add it to your session dictionary and score it - or clear and try something else.
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <button onClick={acceptChallenge} style={{
@@ -755,7 +749,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
                         color: "#ffbe85", fontSize: 12, fontWeight: 800,
                         cursor: "pointer", letterSpacing: "0.06em",
                       }}>
-                        ✓ It's a real word — add &amp; score
+                        ✓ It's a real word - add &amp; score
                       </button>
                       <button onClick={rejectChallenge} style={{
                         padding: "7px 14px", borderRadius: 9,
@@ -780,7 +774,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
             padding: "14px 18px",
           }}>
             <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.16em", color: "#ffffff33", marginBottom: 14 }}>
-              Your Hand — {hand.length} tiles
+              Your Hand - {hand.length} tiles
             </div>
             <div style={{
               display: "flex", flexWrap: "wrap", gap: 10,
@@ -810,7 +804,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
           </div>
         </div>
 
-        {/* Right Panel — compact controls */}
+        {/* Right Panel - compact controls */}
         <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
 
           {/* End Round */}
@@ -835,7 +829,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
             {animating ? "Dealing…" : "🀄 End Round"}
           </button>
 
-          {/* Hint — 3 charges per round */}
+          {/* Hint - 3 charges per round */}
           <div>
             {/* Charge dots */}
             <div style={{ display: "flex", gap: 5, justifyContent: "center", marginBottom: 8 }}>
@@ -881,7 +875,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
                 display: "flex", flexDirection: "column", gap: 6,
               }}>
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.14em", color: "#C77DFF77" }}>
-                  Best word found — tiles glowing ✦
+                  Best word found - tiles glowing ✦
                 </div>
                 {hintWords.map((h, i) => (
                   <div key={i} style={{
@@ -934,12 +928,12 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
       <WordSmokeCanvas words={smokeWords} onWordDone={removeWord} />
       {cheerKey > 0 && <CheerBurst key={cheerKey} />}
 
-      {/* ── GAME OVER OVERLAY — no more words possible ─────────────────────── */}
+      {/* -- GAME OVER OVERLAY - no more words possible ----------------------- */}
       {gameOver && (() => {
         const finalWords = [...allWordsScored, ...words];
         const totalPts = finalWords.reduce((s, w) => s + w.pts, 0);
         const longestWord = finalWords.reduce((a, b) => b.word.length > a.length ? b.word : a, "");
-        const bestWord = finalWords.reduce((a, b) => b.pts > a.pts ? b : a, { word: "—", pts: 0 });
+        const bestWord = finalWords.reduce((a, b) => b.pts > a.pts ? b : a, { word: "-", pts: 0 });
         const avgLen = finalWords.length ? (finalWords.reduce((s, w) => s + w.word.length, 0) / finalWords.length).toFixed(1) : "0";
         return (
           <div style={{
@@ -994,8 +988,8 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
                 {[
                   { label: "Words Scored", value: finalWords.length, color: "#9EF01A" },
                   { label: "Avg Word Length", value: avgLen, color: "#2EC4B6" },
-                  { label: "Longest Word", value: longestWord || "—", color: "#C77DFF" },
-                  { label: "Best Word", value: bestWord.word !== "—" ? `${bestWord.word} (+${bestWord.pts})` : "—", color: "#F4A261" },
+                  { label: "Longest Word", value: longestWord || "-", color: "#C77DFF" },
+                  { label: "Best Word", value: bestWord.word !== "-" ? `${bestWord.word} (+${bestWord.pts})` : "-", color: "#F4A261" },
                 ].map(({ label, value, color }) => (
                   <div key={label} style={{
                     background: "#ffffff06", border: "1px solid #ffffff0f",
@@ -1058,7 +1052,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
   );
 }
 
-function btnStyle(bg, darkBg, textColor) {
+function btnStyle(bg: string, darkBg: string, textColor?: string) {
   return {
     padding: "8px 18px",
     borderRadius: 9,

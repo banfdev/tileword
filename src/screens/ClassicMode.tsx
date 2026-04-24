@@ -1,31 +1,37 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { TILE_CATEGORIES, getTileSound, buildDeck, shuffle, freshTileId, parseTile } from '../data/tiles.js';
-import { WORD_LIST, SESSION_CUSTOM_WORDS, checkWordInSet, buildWordFromTiles, addCustomWord } from '../data/words.js';
-import { DEFAULT_SETTINGS } from '../data/settings.js';
-import { TILE_THEMES } from '../themes/tileThemes.js';
-import { AudioEngine } from '../audio/AudioEngine.js';
-import { Tile } from '../components/Tile.jsx';
-import { CheerBurst } from '../components/CheerBurst.jsx';
-import { WordSmokeCanvas, makeSmokeWord, getWordsForSound } from '../components/WordSmokeCanvas.jsx';
-import { Modal } from '../components/Modal.jsx';
+import { TILE_CATEGORIES, getTileSound, buildDeck, shuffle, freshTileId, parseTile } from '../data/tiles';
+import { WORD_LIST, SESSION_CUSTOM_WORDS, checkWordInSet, buildWordFromTiles, addCustomWord } from '../data/words';
+import { DEFAULT_SETTINGS } from '../data/settings';
+import type { Settings } from '../data/settings';
+import { TILE_THEMES } from '../themes/tileThemes';
+import { AudioEngine } from '../audio/AudioEngine';
+import { Tile } from '../components/Tile';
+import { CheerBurst } from '../components/CheerBurst';
+import { WordSmokeCanvas, makeSmokeWord, getWordsForSound } from '../components/WordSmokeCanvas';
+import type { SmokeWordData } from '../components/WordSmokeCanvas';
+import { Modal } from '../components/Modal';
 
-// ─── CLASSIC MODE ─────────────────────────────────────────────────────────────
+// --- CLASSIC MODE -------------------------------------------------------------
 // Rules: Real Mahjong adapted for phonics.
 //  • Each player holds 13 tiles.
 //  • On your turn: draw 1 from the deck OR claim the top discard, then discard 1.
 //  • Win condition: after drawing, arrange ALL 14 tiles into valid words using
 //    every tile exactly once (partition into words). Declare "Mahjong!" to win.
 //  • Bots play automatically with a short thinking delay.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 const BOT_NAMES  = ["Bot Bào", "Bot Lóng", "Bot Fèng"];
 const BOT_COLORS = ["#E84855", "#2EC4B6", "#F4A261"];
 const PLAYER_COLOR = "#f0c060";
 const HAND_SIZE = 13;
 
+import type { Tile as TileData } from '../data/tiles';
+
+type WordGroup = { word: string; tiles: TileData[] };
+
 // Check whether `tiles` (14 tiles) can be partitioned entirely into valid words.
 // Returns the partition (array of word-groups) or null.
-export function findWinningPartition(tiles) {
+export function findWinningPartition(tiles: TileData[]): WordGroup[] | null {
   const tileSounds = tiles.map(tile =>
     tile.variants
       ? tile.variants.map(v => ({ sound: v, tile }))
@@ -33,9 +39,9 @@ export function findWinningPartition(tiles) {
   );
 
   // Backtracking: try to assign every tile to a word
-  function solve(usedFlags, groups) {
+  function solve(usedFlags: boolean[], groups: WordGroup[]): WordGroup[] | null {
     const firstFree = usedFlags.indexOf(false);
-    if (firstFree === -1) return groups; // all tiles used — winning hand!
+    if (firstFree === -1) return groups; // all tiles used - winning hand!
 
     // Try every word in the dictionary
     const allWords = [...WORD_LIST, ...SESSION_CUSTOM_WORDS];
@@ -54,9 +60,9 @@ export function findWinningPartition(tiles) {
     return null;
   }
 
-  function tryMatch(word, usedFlags, mustInclude) {
-    // Backtracking tile-match for this word, must use tile at mustInclude
-    function matchFrom(pos, usedLocal, idxUsed, tilesUsed, usedMustInclude) {
+  type MatchResult = { idxUsed: number[]; tilesUsed: TileData[] };
+  function tryMatch(word: string, usedFlags: boolean[], mustInclude: number): MatchResult | null {
+    function matchFrom(pos: number, usedLocal: boolean[], idxUsed: number[], tilesUsed: TileData[], usedMustInclude: boolean): MatchResult | null {
       if (pos === word.length) return usedMustInclude ? { idxUsed, tilesUsed } : null;
       for (let i = 0; i < tileSounds.length; i++) {
         if (usedFlags[i] || usedLocal[i]) continue;
@@ -71,7 +77,7 @@ export function findWinningPartition(tiles) {
       }
       return null;
     }
-    return matchFrom(0, {}, [], [], false);
+    return matchFrom(0, new Array(tileSounds.length).fill(false), [], [], false);
   }
 
   return solve(new Array(tiles.length).fill(false), []);
@@ -79,11 +85,10 @@ export function findWinningPartition(tiles) {
 
 // Bot AI: pick up discard if it helps form a word, otherwise draw.
 // Then discard the tile least useful to completing words.
-export function botTakeTurn(hand, discardTop) {
-  const catBonus = { specials:5, r_vowel:4, double_vowel:3, others:2, main_consonants:1, open_vowel:1, closed_vowel:1 };
+export function botTakeTurn(hand: TileData[], discardTop: TileData | null) {
+  const catBonus: Record<string, number> = { specials:5, r_vowel:4, double_vowel:3, others:2, main_consonants:1, open_vowel:1, closed_vowel:1 };
 
-  // Score a hand: sum of tiles that appear in at least one valid word
-  function handScore(h) {
+  function handScore(h: TileData[]) {
     let score = 0;
     const tileSounds = h.map(t => t.variants ? t.variants[t.activeVariant] : t.text.replace(/-/g,""));
     for (const word of WORD_LIST) {
@@ -99,7 +104,7 @@ export function botTakeTurn(hand, discardTop) {
         }
         if (!adv) { ok = false; break; }
       }
-      if (ok && pos === word.length) used.forEach((u, i) => { if (u) score += (catBonus[h[i].category] || 1); });
+      if (ok && pos === word.length) used.forEach((u, i) => { if (u) score += (catBonus[h[i].category] ?? 1); });
     }
     return score;
   }
@@ -128,58 +133,63 @@ export function botTakeTurn(hand, discardTop) {
   return { newHand, discarded: bestDiscard, tookDiscard };
 }
 
-export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
+type GameProps = { onBackToTitle: () => void; settings?: Settings };
+
+export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }: GameProps) {
   const [phase, setPhase]       = useState("lobby");
   const [botCount, setBotCount] = useState(1);
   const [difficulty, setDifficulty] = useState("normal"); // "easy"|"normal"|"hard"|"challenging"
 
-  // ── Difficulty config ─────────────────────────────────────────────────────────
+  // -- Difficulty config ---------------------------------------------------------
   const DIFF = {
     easy:        { label:"Easy",        color:"#9EF01A", playerTimer:60, botMin:20, botMax:30, botSmart:false, botClaims:false, botWinCheck:false, hints:3, emoji:"🌱" },
     normal:      { label:"Normal",      color:"#f0c060", playerTimer:45, botMin:12, botMax:25, botSmart:true,  botClaims:false, botWinCheck:true,  hints:1, emoji:"⚖️"  },
     hard:        { label:"Hard",        color:"#E84855", playerTimer:30, botMin:5,  botMax:20, botSmart:true,  botClaims:true,  botWinCheck:true,  hints:0, emoji:"🔥" },
     challenging: { label:"Challenging", color:"#C77DFF", playerTimer:20, botMin:3,  botMax:10, botSmart:true,  botClaims:true,  botWinCheck:true,  hints:0, emoji:"💀" },
   };
-  const diff = DIFF[difficulty];
+  const diff = DIFF[difficulty as keyof typeof DIFF];
 
-  // ── Game state ───────────────────────────────────────────────────────────────
-  const [playerHand, setPlayerHand]   = useState([]);
-  const [botHands, setBotHands]       = useState([[], [], []]);
-  const [discardPile, setDiscardPile] = useState([]);
-  const [deckTiles, setDeckTiles]     = useState([]);
+  type WinnerState = { owner: string; words: Array<{ word: string; tiles: TileData[]; id: number }> };
+  type FormedWord = { word: string; tiles: TileData[]; id: number };
+
+  // -- Game state ---------------------------------------------------------------
+  const [playerHand, setPlayerHand]   = useState<TileData[]>([]);
+  const [botHands, setBotHands]       = useState<TileData[][]>([[], [], []]);
+  const [discardPile, setDiscardPile] = useState<TileData[]>([]);
+  const [deckTiles, setDeckTiles]     = useState<TileData[]>([]);
   const [deckIdx, setDeckIdx]         = useState(0);
   const [turn, setTurn]               = useState("player");
   const [turnPhase, setTurnPhase]     = useState("draw");
-  const [drawnTile, setDrawnTile]     = useState(null);
-  const [selectedDiscard, setSelectedDiscard] = useState(null);
-  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [drawnTile, setDrawnTile]     = useState<TileData | null>(null);
+  const [selectedDiscard, setSelectedDiscard] = useState<TileData | null>(null);
+  const [selectedIds, setSelectedIds] = useState(new Set<number>());
   const [message, setMessage]         = useState({ text: "", type: "" });
-  const [winner, setWinner]           = useState(null);
+  const [winner, setWinner]           = useState<WinnerState | null>(null);
   const [cheerKey, setCheerKey]       = useState(0);
   const [botThinking, setBotThinking] = useState(false);
-  const [winPartition, setWinPartition] = useState(null);
+  const [winPartition, setWinPartition] = useState<WordGroup[] | null>(null);
   const [canClaimDiscard, setCanClaimDiscard] = useState(false);
   const [timeLeft, setTimeLeft] = useState(30);
-  const [botTimeLeft, setBotTimeLeft] = useState(null);
-  const [hintsLeft, setHintsLeft]     = useState(0);   // set on startGame
-  const [hintTileId, setHintTileId]   = useState(null); // tile to highlight as hint
-  // ── Word-forming state ───────────────────────────────────────────────────────
-  const [formedWords, setFormedWords]   = useState([]);     // [{word, tiles, id}]
-  const [wbSelected, setWbSelected]     = useState([]);     // tiles picked for builder
-  const [handTab, setHandTab]           = useState("hand"); // "hand" | "words"
-  const [fusedIds, setFusedIds]         = useState(new Set()); // tile ids in formedWords
+  const [botTimeLeft, setBotTimeLeft] = useState<number | null>(null);
+  const [hintsLeft, setHintsLeft]     = useState(0);
+  const [hintTileId, setHintTileId]   = useState<number | null>(null);
+  // -- Word-forming state -------------------------------------------------------
+  const [formedWords, setFormedWords]   = useState<FormedWord[]>([]);
+  const [wbSelected, setWbSelected]     = useState<TileData[]>([]);
+  const [handTab, setHandTab]           = useState("hand");
+  const [fusedIds, setFusedIds]         = useState(new Set<number>());
   const [invalidWbShake, setInvalidWbShake] = useState(false);
-  const [newFusedWordId, setNewFusedWordId] = useState(null); // for animation
+  const [newFusedWordId, setNewFusedWordId] = useState<number | null>(null);
 
-  const msgRef    = useRef(null);
-  const deckRef   = useRef([]);
+  const msgRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deckRef   = useRef<TileData[]>([]);
   const deckIdxRef = useRef(0);
   const formedWordIdRef = useRef(0);
-  const timerRef  = useRef(null);
-  const botTimerRef = useRef(null);
+  const timerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Helpers ──────────────────────────────────────────────────────────────────
-  const showMsg = (text, type = "info") => {
+  // -- Helpers ------------------------------------------------------------------
+  const showMsg = (text: string, type = "info") => {
     if (msgRef.current) clearTimeout(msgRef.current);
     setMessage({ text, type });
     msgRef.current = setTimeout(() => setMessage({ text:"", type:"" }), 3500);
@@ -194,12 +204,12 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     return parseTile(src.text, src.category, freshTileId());
   };
 
-  // ── Music ─────────────────────────────────────────────────────────────────────
+  // -- Music ---------------------------------------------------------------------
   useEffect(() => { AudioEngine.startMusic(); return () => AudioEngine.stopMusic(); }, []);
   useEffect(() => { AudioEngine.setMusicVolume(settings.ambientMusic); }, [settings.ambientMusic]);
   useEffect(() => { AudioEngine.setSfxVolume(settings.soundEffects); }, [settings.soundEffects]);
 
-  // ── Start ─────────────────────────────────────────────────────────────────────
+  // -- Start ---------------------------------------------------------------------
   const startGame = () => {
     AudioEngine.play("gameStart");
     const d = shuffle(buildDeck());
@@ -231,7 +241,7 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     setPhase("play");
   };
 
-  // ── Auto-draw at start of player turn ────────────────────────────────────────
+  // -- Auto-draw at start of player turn ----------------------------------------
   useEffect(() => {
     if (phase !== "play" || turn !== "player" || turnPhase !== "draw") return;
     // Small delay so the UI settles before auto-drawing
@@ -247,18 +257,18 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
         if (partition) setWinPartition(partition);
         return newHand;
       });
-      showMsg("Tile drawn — fuse words or discard one to end your turn.", "info");
+      showMsg("Tile drawn - fuse words or discard one to end your turn.", "info");
     }, 350);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turn, turnPhase, phase]);
 
-  // ── canClaimDiscard: available during draw phase ──────────────────────────────
+  // -- canClaimDiscard: available during draw phase ------------------------------
   useEffect(() => {
     setCanClaimDiscard(turn === "player" && turnPhase === "draw" && discardPile.length > 0);
   }, [turn, turnPhase, discardPile]);
 
-  // ── 30-second countdown during player discard phase ──────────────────────────
+  // -- 30-second countdown during player discard phase --------------------------
   useEffect(() => {
     if (phase !== "play" || turn !== "player" || turnPhase !== "discard") {
       setTimeLeft(diff.playerTimer);
@@ -269,7 +279,7 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          clearInterval(timerRef.current);
+          clearInterval(timerRef.current ?? undefined);
           setPlayerHand(hand => {
             const target = hand.find(t => t.id === drawnTile?.id) || hand[hand.length - 1];
             if (!target) return hand;
@@ -290,13 +300,13 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turn, turnPhase, phase]);
 
-  // ── Player: claim top discard (replaces auto-drawn tile) ─────────────────────
-  // Now only callable BEFORE the auto-draw settles — i.e., during draw phase
+  // -- Player: claim top discard (replaces auto-drawn tile) ---------------------
+  // Now only callable BEFORE the auto-draw settles - i.e., during draw phase
   // (the auto-draw happens after 350ms so there's a brief window).
   // Simpler: keep "Claim Discard" as a button that replaces the last drawn tile.
   // Player presses it during discard phase to swap drawn tile for top discard.
 
-  // ── Player: claim top discard (swap it for the auto-drawn tile) ──────────────
+  // -- Player: claim top discard (swap it for the auto-drawn tile) --------------
   const playerClaimDiscard = () => {
     if (turn !== "player" || turnPhase !== "discard" || discardPile.length === 0) return;
     const top = discardPile[discardPile.length - 1];
@@ -314,11 +324,11 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     showMsg(`Swapped drawn tile for "${getTileSound(top)}" from discard.`, "info");
   };
 
-  // ── Player: select tile to discard ───────────────────────────────────────────
-  const toggleSelectTile = (tile) => {
+  // -- Player: select tile to discard -------------------------------------------
+  const toggleSelectTile = (tile: TileData) => {
     if (turn !== "player" || turnPhase !== "discard") return;
     AudioEngine.play("tileClick");
-    // Only one tile can be selected at a time — clicking again deselects
+    // Only one tile can be selected at a time - clicking again deselects
     setSelectedDiscard(prev => prev?.id === tile.id ? null : tile);
     setSelectedIds(prev => {
       const id = tile.id;
@@ -327,7 +337,7 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     });
   };
 
-  // ── Player: confirm discard ───────────────────────────────────────────────────
+  // -- Player: confirm discard ---------------------------------------------------
   const playerDiscard = () => {
     if (!selectedDiscard || turn !== "player" || turnPhase !== "discard") return;
     AudioEngine.play("tileCycle");
@@ -340,7 +350,7 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     advanceTurn("player");
   };
 
-  // ── Player: declare Mahjong ───────────────────────────────────────────────────
+  // -- Player: declare Mahjong ---------------------------------------------------
   const declareMahjong = () => {
     // Win: all tiles in formedWords (hand empty, 14 tiles fused into valid words)
     const totalFused = formedWords.reduce((s, g) => s + g.tiles.length, 0);
@@ -354,8 +364,8 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     setPhase("done");
   };
 
-  // ── Word builder: toggle tile into/out of builder ────────────────────────────
-  const wbToggleTile = (tile) => {
+  // -- Word builder: toggle tile into/out of builder ----------------------------
+  const wbToggleTile = (tile: TileData) => {
     // Allow word building during bot turn too; only block if player is in discard-selection mode
     if (turn === "player" && turnPhase === "discard") return;
     AudioEngine.play("tileClick");
@@ -365,7 +375,7 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     });
   };
 
-  // ── Word builder: commit the selected tiles as a word ────────────────────────
+  // -- Word builder: commit the selected tiles as a word ------------------------
   const wbCommitWord = () => {
     if (wbSelected.length === 0) return;
     const word = buildWordFromTiles(wbSelected);
@@ -392,18 +402,18 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     showMsg(`"${word}" fused! ${playerHand.length - wbSelected.length} tiles left.`, "success");
   };
 
-  // ── Word builder: break apart a fused word (return tiles to hand) ────────────
-  const wbBreakWord = (wordId) => {
+  // -- Word builder: break apart a fused word (return tiles to hand) ------------
+  const wbBreakWord = (wordId: number) => {
     const group = formedWords.find(g => g.id === wordId);
     if (!group) return;
     AudioEngine.play("tileCycle");
     setFormedWords(prev => prev.filter(g => g.id !== wordId));
     setFusedIds(prev => { const n = new Set(prev); group.tiles.forEach(t => n.delete(t.id)); return n; });
     setPlayerHand(prev => [...prev, ...group.tiles]);
-    showMsg(`"${group.word}" broken apart — tiles returned to hand.`, "info");
+    showMsg(`"${group.word}" broken apart - tiles returned to hand.`, "info");
   };
 
-  // ── Hint: highlight a tile that appears in a valid word ──────────────────────
+  // -- Hint: highlight a tile that appears in a valid word ----------------------
   const useHint = () => {
     if (hintsLeft <= 0 || playerHand.length === 0) return;
     AudioEngine.play("tileClick");
@@ -430,19 +440,19 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
         }
       }
     }
-    if (!bestTile) { showMsg("No hint available — try different tiles!", "warn"); return; }
+    if (!bestTile) { showMsg("No hint available - try different tiles!", "warn"); return; }
     setHintsLeft(h => h - 1);
     setHintTileId(bestTile.id);
     showMsg(`💡 Hint: try using "${getTileSound(bestTile)}" in a word!`, "info");
     setTimeout(() => setHintTileId(null), 3000);
   };
-  const advanceTurn = (current) => {
+  const advanceTurn = (current: string) => {
     const order = ["player", ...Array.from({ length: botCount }, (_, i) => `bot${i}`)];
     const next = order[(order.indexOf(current) + 1) % order.length];
     setTurn(next); setTurnPhase("draw");
   };
 
-  // ── Bot turn ──────────────────────────────────────────────────────────────────
+  // -- Bot turn ------------------------------------------------------------------
   useEffect(() => {
     if (phase !== "play" || !turn.startsWith("bot")) {
       setBotTimeLeft(null);
@@ -463,7 +473,7 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
       remaining -= 1;
       setBotTimeLeft(remaining);
       if (remaining <= fireAt) {
-        clearInterval(botTimerRef.current);
+        clearInterval(botTimerRef.current ?? undefined);
         setBotTimeLeft(null);
 
         // Execute the bot's actual move
@@ -481,7 +491,7 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
             if (partition) {
               setDiscardPile(p => p.slice(0, -1));
               setBotThinking(false);
-              setWinner({ owner: `bot${botIdx}`, words: partition });
+              setWinner({ owner: `bot${botIdx}`, words: partition.map((g, i) => ({ ...g, id: i })) });
               AudioEngine.play("sessionEnd");
               setPhase("done");
               return prev;
@@ -506,7 +516,7 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
             const partition = findWinningPartition(workingHand);
             if (partition) {
               setBotThinking(false);
-              setWinner({ owner: `bot${botIdx}`, words: partition });
+              setWinner({ owner: `bot${botIdx}`, words: partition.map((g, i) => ({ ...g, id: i })) });
               AudioEngine.play("sessionEnd");
               setPhase("done");
               return prev;
@@ -544,17 +554,17 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turn, phase]);
 
-  // ── Cycle variant ─────────────────────────────────────────────────────────────
-  const cycleVariant = (tile) => {
+  // -- Cycle variant -------------------------------------------------------------
+  const cycleVariant = (tile: TileData) => {
     AudioEngine.play("tileCycle");
-    const cycle = t => (!t.variants || t.id !== tile.id) ? t
+    const cycle = (t: TileData): TileData => (!t.variants || t.id !== tile.id) ? t
       : { ...t, activeVariant: (t.activeVariant + 1) % t.variants.length };
     setPlayerHand(prev => prev.map(cycle));
   };
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ----------------------------------------------------------------------------
   // LOBBY
-  // ────────────────────────────────────────────────────────────────────────────
+  // ----------------------------------------------------------------------------
   if (phase === "lobby") {
   const _th = TILE_THEMES[settings.tileTheme] || TILE_THEMES.neon;
   return (
@@ -635,9 +645,9 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
   );
   } // end lobby
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ----------------------------------------------------------------------------
   // DONE
-  // ────────────────────────────────────────────────────────────────────────────
+  // ----------------------------------------------------------------------------
   if (phase === "done" && winner) {
     const _th = TILE_THEMES[settings.tileTheme] || TILE_THEMES.neon;
     const isPlayerWin = winner.owner === "player";
@@ -683,9 +693,9 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     );
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ----------------------------------------------------------------------------
   // PLAY
-  // ────────────────────────────────────────────────────────────────────────────
+  // ----------------------------------------------------------------------------
   const isPlayerTurn = turn === "player";
   const topDiscard   = discardPile.length > 0 ? discardPile[discardPile.length - 1] : null;
   const turnLabel    = isPlayerTurn
@@ -693,7 +703,7 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     : `${BOT_NAMES[parseInt(turn.replace("bot",""))] ?? "Bot"} is thinking…`;
   const turnColor = isPlayerTurn ? PLAYER_COLOR : (BOT_COLORS[parseInt(turn.replace("bot",""))] || "#ffffff");
 
-  // Total fused tile count — when 14, player can declare
+  // Total fused tile count - when 14, player can declare
   const fusedCount  = formedWords.reduce((s, g) => s + g.tiles.length, 0);
   const canDeclare  = playerHand.length === 0 && fusedCount === 14 && formedWords.length > 0;
   const wbPreview   = wbSelected.map(t => getTileSound(t)).join("").toLowerCase();
@@ -715,7 +725,7 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
         button:focus { outline: none; box-shadow: none; }
       `}</style>
 
-      {/* ── Header ── */}
+      {/* -- Header -- */}
       <div style={{ borderBottom:`1px solid ${_th.headerBorder}`, background:_th.headerBg, backdropFilter:"blur(12px)", padding:"11px 22px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100 }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
           <button onClick={() => { AudioEngine.play("backToMenu"); onBackToTitle(); }} style={{ background:"#ffffff08", border:"1px solid #ffffff18", color:"#ffffff88", borderRadius:10, padding:"6px 14px", cursor:"pointer", fontSize:12, fontWeight:700, letterSpacing:"0.06em" }}>🚪 Home</button>
@@ -736,15 +746,15 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
         </div>
       </div>
 
-      {/* ── Message ── */}
+      {/* -- Message -- */}
       {message.text && (
         <div style={{ margin:"8px 20px 0", padding:"8px 16px", borderRadius:8, fontSize:13, fontWeight:500, background:{success:"#9EF01A22",error:"#E8485522",warn:"#F4A26122",info:"#C77DFF18"}[message.type]||"#ffffff11", border:`1px solid ${{success:"#9EF01A55",error:"#E8485555",warn:"#F4A26155",info:"#C77DFF44"}[message.type]||"#ffffff22"}`, color:{success:"#c8ff5a",error:"#ff6b78",warn:"#ffbe85",info:"#e4acff"}[message.type]||"#e0e0f0" }}>{message.text}</div>
       )}
 
-      {/* ── Main layout ── */}
+      {/* -- Main layout -- */}
       <div style={{ flex:1, display:"flex", gap:14, padding:"14px 20px 14px" }}>
 
-        {/* ── Center: discard pile ── */}
+        {/* -- Center: discard pile -- */}
         <div style={{ flex:1, display:"flex", flexDirection:"column", gap:12 }}>
           <div style={{ background:_th.cardBg, border:`2px solid ${_th.cardBorder}`, borderRadius:18, padding:"16px 20px", minHeight:120, boxShadow:"inset 0 2px 16px #00000055" }}>
             <div style={{ fontSize:9, color:_th.pageText+"44", textTransform:"uppercase", letterSpacing:"0.18em", marginBottom:10 }}>Discard Pile</div>
@@ -790,10 +800,10 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
           )}
         </div>
 
-        {/* ── Right: action panel ── */}
+        {/* -- Right: action panel -- */}
         <div style={{ width:196, flexShrink:0, display:"flex", flexDirection:"column", gap:10 }}>
 
-          {/* Timer — player countdown or bot countdown */}
+          {/* Timer - player countdown or bot countdown */}
           {isPlayerTurn && turnPhase === "discard" && (
             <div style={{ background: timeLeft <= 10 ? "#E8485522" : "#ffffff06", border: `1px solid ${timeLeft <= 10 ? "#E8485566" : "#ffffff10"}`, borderRadius:14, padding:"12px 14px", textAlign:"center", transition:"all 0.3s" }}>
               <div style={{ fontSize:9, color: timeLeft <= 10 ? "#ff6b78" : "#ffffff33", textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:6 }}>Time to discard</div>
@@ -862,7 +872,7 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
         </div>
       </div>
 
-      {/* ── Hand area (tabbed) ── */}
+      {/* -- Hand area (tabbed) -- */}
       <div style={{ background:_th.cardBg, borderTop:`1px solid ${_th.cardBorder}`, padding:"0 20px 18px" }}>
         {/* Tabs */}
         <div style={{ display:"flex", gap:0, marginBottom:12, borderBottom:"1px solid #ffffff0f", paddingTop:2 }}>
@@ -903,13 +913,13 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
               {isPlayerTurn && turnPhase==="discard"
                 ? <span style={{ color:"#F4A261" }}>Tap a tile to select for discard, or fuse words first</span>
                 : !isPlayerTurn
-                ? <span style={{ color:"#9EF01A88" }}>Bot is thinking — tap tiles to build words now!</span>
+                ? <span style={{ color:"#9EF01A88" }}>Bot is thinking - tap tiles to build words now!</span>
                 : <span>Waiting…</span>}
             </div>
 
             <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
               {playerHand.length === 0 ? (
-                <div style={{ color:"#ffffff22", fontSize:12, fontStyle:"italic" }}>No tiles in hand — all fused!</div>
+                <div style={{ color:"#ffffff22", fontSize:12, fontStyle:"italic" }}>No tiles in hand - all fused!</div>
               ) : playerHand.map(tile => {
                 const isWbSel = wbSelected.some(t => t.id === tile.id);
                 const isDiscardSel = selectedIds.has(tile.id);
@@ -942,7 +952,7 @@ export function ClassicMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
           <div>
             {formedWords.length === 0 ? (
               <div style={{ color:"#ffffff22", fontSize:12, fontStyle:"italic", padding:"8px 0" }}>
-                No words fused yet — select tiles in the Hand tab to build words.
+                No words fused yet - select tiles in the Hand tab to build words.
               </div>
             ) : (
               <div style={{ display:"flex", flexWrap:"wrap", gap:12 }}>

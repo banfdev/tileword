@@ -1,16 +1,29 @@
-import { useState, useEffect } from 'react';
-import { WORD_LIST } from '../data/words.js';
+import { useEffect } from 'react';
+import { WORD_LIST } from '../data/words';
 
-export const EXTRA_SOUND_WORDS = {
+export type SmokeWordData = {
+  id: number;
+  word: string;
+  originX: number;
+  originY: number;
+  drift: number;
+  duration: number;
+  fontSize: number;
+  color: string;
+  rise: number;
+  delay: number;
+  born: number;
+};
+
+export const EXTRA_SOUND_WORDS: Record<string, string[]> = {
   "ness":  ["kindness","darkness","sadness","fitness","madness","illness","boldness","fullness","softness","fairness","witness","calmness","oddness","richness","wetness","gladness"],
   "eur":   ["neur","ateur","grandeur","liqueur","chauffeur","entrepreneur","connoisseur","saboteur","raconteur","masseur","pasteur","voyeur"],
   "eer":   ["beer","deer","peer","seer","veer","cheer","sheer","steer","career","pioneer","volunteer","engineer","sincere","appear","casheer"],
   "ier":   ["tier","pier","cashier","frontier","soldier","barrier","carrier","warrior","premier","elier","earlier","heavier","merrier","stormier"],
   "oor":   ["door","floor","poor","moor","boor","spoor","outdoor","indoor","hardcore","overlook","overlord","folklore","sophomore"],
   "oar":   ["oar","boar","soar","roar","board","hoard","hoarse","coarse","aboard","cupboard"],
-  "tch":   ["watch","catch","match","patch","scratch","stretch","ditch","witch","fetch","sketch","notch","latch","hutch","Dutch","stitch","switch","batch","hatch","snatch","wretch"],
+  "tch":   ["watch","catch","match","patch","scratch","stretch","ditch","witch","fetch","sketch","notch","latch","hutch","Dutch","stitch","switch","batch","hatch","snatch","wretch","pitch"],
   "ck":    ["back","black","block","brick","check","click","clock","crack","deck","dock","duck","flick","flock","hack","kick","knock","lock","luck","neck","nick","pack","pick","puck","rack","rick","rock","sack","sick","slack","slick","smack","snack","sock","stack","stick","stock","stuck","thick","tick","track","trick","truck","tuck","whack","wreck"],
-  "tch":   ["catch","fetch","hatch","latch","match","notch","patch","pitch","ratch","sketch","snatch","stitch","stretch","switch","watch","witch","wretch"],
   "wh":    ["what","when","where","which","while","whip","whirl","whisper","whistle","white","whole","whom","whose","why","wheel","wheat","whack","whale","whine","whiff"],
   "ph":    ["phone","photo","phrase","graph","alpha","elephant","orphan","trophy","triumph","dolphin","phantom","prophet","typhoon","nephew","sphere","alphabet","emphasis","philosophy","physician","pharmacy","phenomenon","physique","symphony"],
   "ng":    ["ring","sing","king","wing","thing","bring","string","spring","swing","fling","cling","along","among","belong","strong","tongue","young","song","long","wrong","gang","hang","rang","sang","bang","rang","clang","slang","tong","prong","gong","throng","sponge","plunge","lunge","cringe","fringe","hinge","singe","tinge"],
@@ -39,8 +52,8 @@ export const EXTRA_SOUND_WORDS = {
 };
 
 // Build map from main word list
-export const SOUND_WORDS_MAP = (() => {
-  const map = {};
+export const SOUND_WORDS_MAP: Record<string, string[]> = (() => {
+  const map: Record<string, string[]> = {};
   // Seed with extra curated words first
   for (const [key, words] of Object.entries(EXTRA_SOUND_WORDS)) {
     map[key] = [...words];
@@ -58,14 +71,14 @@ export const SOUND_WORDS_MAP = (() => {
   return map;
 })();
 
-export function getWordsForSound(sound) {
+export function getWordsForSound(sound: string): string[] {
   const key = sound.split("/")[0].toLowerCase().replace(/-/g, "");
-  return SOUND_WORDS_MAP[key] || SOUND_WORDS_MAP[sound.toLowerCase()] || [];
+  return SOUND_WORDS_MAP[key] ?? SOUND_WORDS_MAP[sound.toLowerCase()] ?? [];
 }
 
-// CSS-animated smoke word — each word is a self-contained animated div
+// CSS-animated smoke word - each word is a self-contained animated div
 let _smokeId = 0;
-export function makeSmokeWord(word, originX, originY, color) {
+export function makeSmokeWord(word: string, originX: number, originY: number, color: string): SmokeWordData {
   const drift = (Math.random() - 0.5) * 50;      // gentle horizontal offset
   const duration = 2.8 + Math.random() * 1.6;     // 2.8s–4.4s float time
   const fontSize = 12 + Math.floor(Math.random() * 7);
@@ -74,7 +87,7 @@ export function makeSmokeWord(word, originX, originY, color) {
   return { id: _smokeId++, word, originX, originY, drift, duration, fontSize, color, rise, delay, born: Date.now() };
 }
 
-export function SmokeWord({ p, onDone }) {
+export function SmokeWord({ p, onDone }: { p: SmokeWordData; onDone: () => void }) {
   // Remove from DOM after animation completes
   useEffect(() => {
     const t = setTimeout(onDone, (p.duration + 0.3) * 1000);
@@ -104,7 +117,7 @@ export function SmokeWord({ p, onDone }) {
   );
 }
 
-export function WordSmokeCanvas({ words, onWordDone }) {
+export function WordSmokeCanvas({ words, onWordDone }: { words: SmokeWordData[]; onWordDone: (id: number) => void }) {
   if (words.length === 0) return null;
   return (
     <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 9999, overflow: "hidden" }}>

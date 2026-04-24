@@ -1,17 +1,21 @@
 import { useState } from 'react';
-import { DEFAULT_SETTINGS } from './data/settings.js';
-import { AudioEngine } from './audio/AudioEngine.js';
-import { TitleScreen } from './screens/TitleScreen.jsx';
-import { SinglePlayerMenu } from './screens/SinglePlayerMenu.jsx';
-import { MahjongPhonicsGame } from './screens/MahjongPhonicsGame.jsx';
-import { TimedMode } from './screens/TimedMode.jsx';
-import { ClassicMode } from './screens/ClassicMode.jsx';
+import { DEFAULT_SETTINGS } from './data/settings';
+import type { Settings } from './data/settings';
+import { AudioEngine } from './audio/AudioEngine';
+import { TitleScreen } from './screens/TitleScreen';
+import { SinglePlayerMenu } from './screens/SinglePlayerMenu';
+import { MahjongPhonicsGame } from './screens/MahjongPhonicsGame';
+import { TimedMode } from './screens/TimedMode';
+import { ClassicMode } from './screens/ClassicMode';
 
-// ─── ROOT APP — manages screen routing ────────────────────────────────────────
+type Screen = "title" | "singleplayer" | "endless" | "timed" | "classic";
+
+// --- ROOT APP - manages screen routing ----------------------------------------
 export default function App() {
-  const [screen, setScreen] = useState("title"); // "title" | "singleplayer" | "endless" | "timed" | "classic"
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
-  const updateSetting = (key, val) => setSettings(s => ({ ...s, [key]: val }));
+  const [screen, setScreen] = useState<Screen>("title");
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const updateSetting = <K extends keyof Settings>(key: K, val: Settings[K]) =>
+    setSettings(s => ({ ...s, [key]: val }));
 
   const handleUnlock = () => AudioEngine.unlock();
 

@@ -1,17 +1,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { TILE_CATEGORIES, getTileSound, buildDeck, shuffle, freshTileId, parseTile } from '../data/tiles.js';
-import { WORD_LIST, SESSION_CUSTOM_WORDS, checkWordInSet, buildWordFromTiles, addCustomWord } from '../data/words.js';
-import { DEFAULT_SETTINGS } from '../data/settings.js';
-import { TILE_THEMES } from '../themes/tileThemes.js';
-import { AudioEngine } from '../audio/AudioEngine.js';
-import { Tile } from '../components/Tile.jsx';
-import { CheerBurst } from '../components/CheerBurst.jsx';
-import { WordSmokeCanvas, makeSmokeWord, getWordsForSound } from '../components/WordSmokeCanvas.jsx';
-import { Modal } from '../components/Modal.jsx';
-import { FloatingTile, FLOATING_TILES } from '../components/FloatingTile.jsx';
+import { TILE_CATEGORIES, getTileSound, buildDeck, shuffle, freshTileId, parseTile } from '../data/tiles';
+import { WORD_LIST, SESSION_CUSTOM_WORDS, checkWordInSet, buildWordFromTiles, addCustomWord } from '../data/words';
+import { DEFAULT_SETTINGS } from '../data/settings';
+import type { Settings, TileThemeKey } from '../data/settings';
+import { TILE_THEMES } from '../themes/tileThemes';
+import { AudioEngine } from '../audio/AudioEngine';
+import { Tile } from '../components/Tile';
+import { CheerBurst } from '../components/CheerBurst';
+import { WordSmokeCanvas, makeSmokeWord, getWordsForSound } from '../components/WordSmokeCanvas';
+import { Modal } from '../components/Modal';
+import { FloatingTile, FLOATING_TILES } from '../components/FloatingTile';
 
-export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }) {
-  const [modal, setModal] = useState(null); // "rules" | "credits" | "settings" | null
+type TitleScreenProps = {
+  onPlay: () => void;
+  onPlayTimed: () => void;
+  settings: Settings;
+  updateSetting: <K extends keyof Settings>(key: K, val: Settings[K]) => void;
+};
+
+export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }: TitleScreenProps) {
+  const [modal, setModal] = useState<"rules" | "credits" | "settings" | null>(null);
   const [entered, setEntered] = useState(false);
   const [wordImport, setWordImport] = useState(""); // textarea value for bulk word import
   const [customWordList, setCustomWordList] = useState(() => [...SESSION_CUSTOM_WORDS]); // reactive copy
@@ -32,7 +40,7 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }) {
     AudioEngine.setSfxVolume(settings.soundEffects);
   }, [settings.soundEffects]);
 
-  const menuBtn = (label, color, onClick, subtitle) => (
+  const menuBtn = (label: string, color: string, onClick?: () => void, subtitle?: string) => (
     <button
       onClick={onClick}
       style={{
@@ -70,7 +78,7 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }) {
       <span>{label}</span>
       <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
         {subtitle && <span style={{ fontSize: 9, opacity: 0.5, letterSpacing: "0.14em", fontWeight: 400 }}>{subtitle}</span>}
-        <span style={{ fontSize: 18, opacity: 0.7 }}>›</span>
+        <span style={{ fontSize: 18, opacity: 0.7 }}>{'>'}</span>
       </span>
     </button>
   );
@@ -281,14 +289,14 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }) {
         <Modal title="📖 How to Play" onClose={() => { AudioEngine.play("modalClose"); setModal(null); }}>
           <div style={{ color: "#ffffff99", fontSize: 13, lineHeight: 1.9 }}>
             {[
-              ["🀄 Your Hand", "You are dealt 13 tiles at the start of each round. Tiles come in 7 categories — vowels, consonants, special blends, and more."],
+              ["🀄 Your Hand", "You are dealt 13 tiles at the start of each round. Tiles come in 7 categories - vowels, consonants, special blends, and more."],
               ["✏️ Building Words", "Click tiles in order to select them and build a word. The word preview updates live as you pick tiles."],
               ["⇄ Dual Tiles", "Tiles showing two sounds (like ei/ey or h/wh) have a small ⇄ badge. Click it to toggle between the two sounds before building your word."],
-              ["✓ Make Word", "Select tiles to spell a word, then press Make Word. It checks the dictionary and scores instantly — valid words are banked, invalid ones shake and clear so you can try again."],
+              ["✓ Make Word", "Select tiles to spell a word, then press Make Word. It checks the dictionary and scores instantly - valid words are banked, invalid ones shake and clear so you can try again."],
               ["🏁 Ending a Round", "Press End Round when you're done. Used tiles are discarded and replaced with fresh ones from the deck."],
               ["💡 Hints", "Stuck? Press Get Hint to see possible words from your current hand. Click any hint word to make its tiles glow gold for 3 seconds."],
               ["🔄 Reset", "Press Reset in the top bar to start the entire game over with a freshly shuffled deck."],
-              ["⭐ Scoring", "Points = word length × tile value. Specials: 5pt · R-Vowel: 4pt · Double Vowel: 3pt · Others: 2pt · Consonants/Vowels: 1pt each."],
+              ["⭐ Scoring", "Points = word length x tile value. Specials: 5pt · R-Vowel: 4pt · Double Vowel: 3pt · Others: 2pt · Consonants/Vowels: 1pt each."],
             ].map(([title, desc], i) => (
               <div key={i} style={{ marginBottom: 14 }}>
                 <div style={{ color: "#f0c060", fontWeight: 700, fontSize: 13, marginBottom: 3 }}>{title}</div>
@@ -301,7 +309,7 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }) {
 
       {/* Settings Modal */}
       {modal === "settings" && (() => {
-        const Toggle = ({ settingKey, on }) => (
+        const Toggle = ({ settingKey, on }: { settingKey: keyof Settings; on: boolean }) => (
           <button onClick={() => updateSetting(settingKey, !on)} style={{
             width: 46, height: 26, borderRadius: 13, flexShrink: 0,
             background: on ? "linear-gradient(90deg,#2EC4B6,#5de8e0)" : "#ffffff18",
@@ -316,7 +324,7 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }) {
             }}/>
           </button>
         );
-        const Row = ({ settingKey, label, desc, on, accent }) => (
+        const Row = ({ settingKey, label, desc, on, accent: _accent }: { settingKey: keyof Settings; label: string; desc: string; on: boolean; accent?: string }) => (
           <div style={{
             display: "flex", alignItems: "center", gap: 14,
             padding: "11px 14px", marginBottom: 7,
@@ -330,7 +338,7 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }) {
             <Toggle settingKey={settingKey} on={on} />
           </div>
         );
-        const SectionHead = ({ text }) => (
+        const SectionHead = ({ text }: { text: string }) => (
           <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.16em", color: "#F4A26199", margin: "18px 0 10px", paddingLeft: 2 }}>{text}</div>
         );
         return (
@@ -341,11 +349,11 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }) {
             <Row settingKey="tileAnimations" label="✨ Tile Animations"  desc="Tiles lift and glow on hover and select"          on={settings.tileAnimations} />
 
             <SectionHead text="Sound" />
-            {/* Volume slider rows — not using the Toggle Row component */}
-            {[
-              { key: "soundEffects", label: "🔊 Sound Effects", desc: "Tile clicks, word outcomes, hints & fanfares" },
-              { key: "ambientMusic",  label: "🎵 Ambient Music",  desc: "Lo-fi pentatonic loop while you play" },
-            ].map(({ key, label, desc }) => {
+            {/* Volume slider rows - not using the Toggle Row component */}
+            {([
+              { key: "soundEffects" as const, label: "🔊 Sound Effects", desc: "Tile clicks, word outcomes, hints & fanfares" },
+              { key: "ambientMusic"  as const, label: "🎵 Ambient Music",  desc: "Lo-fi pentatonic loop while you play" },
+            ] as Array<{ key: "soundEffects" | "ambientMusic"; label: string; desc: string }>).map(({ key, label, desc }) => {
               const vol = settings[key];   // 0–1
               const muted = vol <= 0;
               const pct = Math.round(vol * 100);
@@ -393,7 +401,7 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }) {
                       fontSize: 11, fontWeight: 700, minWidth: 30, textAlign: "right",
                       color: muted ? "#ffffff33" : accent,
                       fontFamily: "monospace",
-                    }}>{muted ? "—" : `${pct}%`}</span>
+                    }}>{muted ? "-" : `${pct}%`}</span>
                   </div>
                 </div>
               );
@@ -478,12 +486,12 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }) {
             </div>
 
             <SectionHead text="Tile Theme" />
-            {/* Theme Picker — chess.com style */}
+            {/* Theme Picker - chess.com style */}
             <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:7 }}>
               {Object.entries(TILE_THEMES).map(([key, t]) => {
                 const isActive = (settings.tileTheme || "neon") === key;
                 return (
-                  <button key={key} onClick={() => updateSetting("tileTheme", key)} style={{
+                  <button key={key} onClick={() => updateSetting("tileTheme", key as TileThemeKey)} style={{
                     display:"flex", alignItems:"center", gap:14,
                     padding:"11px 14px", borderRadius:12, cursor:"pointer",
                     background: isActive ? "#C77DFF18" : "#ffffff06",
@@ -520,7 +528,7 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }) {
             </div>
 
             <div style={{ marginTop: 20, textAlign: "center" }}>
-              <button onClick={() => Object.keys(DEFAULT_SETTINGS).forEach(k => updateSetting(k, DEFAULT_SETTINGS[k]))} style={{
+              <button onClick={() => (Object.keys(DEFAULT_SETTINGS) as Array<keyof Settings>).forEach(k => updateSetting(k, DEFAULT_SETTINGS[k]))} style={{
                 background: "#ffffff08", border: "1px solid #ffffff15",
                 color: "#ffffff55", borderRadius: 8, padding: "7px 20px",
                 cursor: "pointer", fontSize: 11, letterSpacing: "0.1em",
@@ -549,7 +557,7 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }) {
               ["🔤 Phonics Curriculum", "Tile categories based on standard phonics frameworks: open/closed vowels, vowel teams, r-controlled vowels, consonant digraphs and blends"],
               ["📚 Word List", "~1,894 words drawn from Dolch, Fry, Oxford common word lists and phonics curriculum vocabulary"],
               ["⚙️ Built With", "React · Inline CSS · No external UI libraries"],
-              ["💡 Special Thanks", "To everyone learning to read — one tile at a time"],
+              ["💡 Special Thanks", "To everyone learning to read - one tile at a time"],
             ].map(([title, desc], i) => (
               <div key={i} style={{
                 marginBottom: 16,

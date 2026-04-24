@@ -1,5 +1,26 @@
-// ─── TILE DEFINITIONS ────────────────────────────────────────────────────────
-export const TILE_CATEGORIES = {
+// --- TILE DEFINITIONS --------------------------------------------------------
+export type TileCategory = {
+  label: string;
+  color: string;
+  bg: string;
+  accent: string;
+  tiles: string[];
+};
+
+export type TileCategoryKey =
+  | 'open_vowel' | 'closed_vowel' | 'double_vowel' | 'r_vowel'
+  | 'main_consonants' | 'specials' | 'others';
+
+export type Tile = {
+  id: number;
+  text: string;
+  display: string;
+  variants: string[] | null;
+  activeVariant: number;
+  category: TileCategoryKey;
+};
+
+export const TILE_CATEGORIES: Record<TileCategoryKey, TileCategory> = {
   open_vowel: {
     label: "Open Vowel",
     color: "#E84855",
@@ -67,7 +88,7 @@ export const TILE_CATEGORIES = {
 };
 
 // For dual tiles like "ei/ey", extract both variants
-export function parseTile(text, cat, id) {
+export function parseTile(text: string, cat: TileCategoryKey, id: number): Tile {
   if (text.includes("/")) {
     const variants = text.split("/");
     return { id, text, display: text, variants, activeVariant: 0, category: cat };
@@ -76,29 +97,29 @@ export function parseTile(text, cat, id) {
 }
 
 // Build the full 108-tile deck
-export function buildDeck() {
-  const deck = [];
+export function buildDeck(): Tile[] {
+  const deck: Tile[] = [];
   let id = 0;
   Object.entries(TILE_CATEGORIES).forEach(([cat, data]) => {
     data.tiles.forEach((text) => {
-      deck.push(parseTile(text, cat, id++));
+      deck.push(parseTile(text, cat as TileCategoryKey, id++));
     });
   });
   return deck;
 }
 
 // Get the active sound of a tile (respects chosen variant for dual tiles)
-export function getTileSound(tile) {
+export function getTileSound(tile: Tile): string {
   if (tile.variants) return tile.variants[tile.activeVariant];
   return tile.text.replace(/-/g, "");
 }
 
-// Global tile ID counter — always increases, guarantees uniqueness across recycled decks
+// Global tile ID counter - always increases, guarantees uniqueness across recycled decks
 export let _globalTileId = 10000;
-export function freshTileId() { return _globalTileId++; }
+export function freshTileId(): number { return _globalTileId++; }
 
 // Fisher-Yates shuffle
-export function shuffle(arr) {
+export function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));

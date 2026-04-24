@@ -1,9 +1,26 @@
-import { TILE_CATEGORIES } from '../data/tiles.js';
-import { TILE_THEMES } from '../themes/tileThemes.js';
-import { getTileSound } from '../data/tiles.js';
+import { TILE_CATEGORIES } from '../data/tiles';
+import { TILE_THEMES } from '../themes/tileThemes';
+import { getTileSound } from '../data/tiles';
+import type { Tile as TileData } from '../data/tiles';
+import type { TileThemeKey } from '../data/settings';
 
-// ─── TILE COMPONENT─────────────────────────────────────
-export function Tile({ tile, selected, highlighted, autoPulse, onClick, onCycleVariant, onHover, disabled, small, theme, animated = true, showLabel = true }) {
+type TileProps = {
+  tile: TileData;
+  selected: boolean;
+  highlighted?: boolean;
+  autoPulse?: boolean;
+  onClick: (tile: TileData) => void;
+  onCycleVariant?: (tile: TileData) => void;
+  onHover?: (tile: TileData | null, x: number, y: number) => void;
+  disabled?: boolean;
+  small?: boolean;
+  theme: TileThemeKey;
+  animated?: boolean;
+  showLabel?: boolean;
+};
+
+// --- TILE COMPONENT-------------------------------------
+export function Tile({ tile, selected, highlighted, autoPulse, onClick, onCycleVariant, onHover, disabled, small, theme, animated = true, showLabel = true }: TileProps) {
   const cat = TILE_CATEGORIES[tile.category];
   const size = small ? 52 : 64;
   const isDual = !!(tile.variants && tile.variants.length > 1);
@@ -33,7 +50,7 @@ export function Tile({ tile, selected, highlighted, autoPulse, onClick, onCycleV
           cursor: disabled ? "default" : "pointer",
           transition: "all 0.15s ease",
           transform: selected && animated ? "translateY(-6px) scale(1.06)" : "translateY(0)",
-          boxShadow: th.tileShadow(cat, selected, highlighted),
+          boxShadow: th.tileShadow(cat, selected, highlighted ?? false),
           animation: autoPulse ? "tileAutoPulse 1.4s ease-in-out" : "none",
           display: "flex",
           flexDirection: "column",
@@ -47,7 +64,7 @@ export function Tile({ tile, selected, highlighted, autoPulse, onClick, onCycleV
           padding: 0,
         }}
       >
-        {/* Mahjong inner frame — mimics the decorative border of real tiles */}
+        {/* Mahjong inner frame - mimics the decorative border of real tiles */}
         {isMahjong && (
           <div style={{
             position: "absolute", inset: 3, borderRadius: 2,
@@ -64,7 +81,7 @@ export function Tile({ tile, selected, highlighted, autoPulse, onClick, onCycleV
         )}
         {isDual ? (
           <div style={{ display: "flex", alignItems: "center", gap: 1, lineHeight: 1, position: "relative", zIndex: 1 }}>
-            {tile.variants.map((v, i) => {
+            {tile.variants!.map((v, i) => {
               const isActive = i === tile.activeVariant;
               const fs = v.length > 2 ? 10 : 13;
               return (

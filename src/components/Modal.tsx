@@ -1,4 +1,8 @@
-export function Modal({ title, onClose, children }) {
+import type { ReactNode } from 'react';
+
+type ModalProps = { title: string; onClose: () => void; children: ReactNode };
+
+export function Modal({ title, onClose, children }: ModalProps) {
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 200,

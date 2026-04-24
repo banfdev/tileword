@@ -1,4 +1,6 @@
-export const FLOATING_TILES = [
+type FloatingTileProps = { text: string; color: string; x: number; y: number; delay: number; dur: number };
+
+export const FLOATING_TILES: FloatingTileProps[] = [
   { text: "ai", color: "#2EC4B6", x: 8,  y: 15, delay: 0,    dur: 7 },
   { text: "sh", color: "#FFBF69", x: 78, y: 10, delay: 1.2,  dur: 8 },
   { text: "ee", color: "#2EC4B6", x: 22, y: 72, delay: 0.5,  dur: 6 },
@@ -17,7 +19,7 @@ export const FLOATING_TILES = [
   { text: "dr", color: "#9EF01A", x: 28, y: 55, delay: 1.9,  dur: 7 },
 ];
 
-export function FloatingTile({ text, color, x, y, delay, dur }) {
+export function FloatingTile({ text, color, x, y, delay, dur }: FloatingTileProps) {
   return (
     <div style={{
       position: "absolute",

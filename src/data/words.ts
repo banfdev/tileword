@@ -1,6 +1,7 @@
-import { getTileSound } from './tiles.js';
+import { getTileSound } from './tiles';
+import type { Tile } from './tiles';
 
-// ─── EMBEDDED WORD LIST (~1800 common English words) ─────────────────────────
+// --- EMBEDDED WORD LIST (~1800 common English words) -------------------------
 // Embedded directly to avoid network dependency in the artifact sandbox
 export const WORD_LIST = [
   "abandon","ability","able","aboard","about","above","absence","absolute","absorb","abstract","accent","accept","access","account","accurate","acid","acknowledge","acquire","across","act","action","active","actual","actually","add",
@@ -127,14 +128,14 @@ export const WORD_LIST = [
   "valid", "valve", "vapor", "venom", "verse", "video", "vigil", "viola", "viral", "visor", "vista", "vital",
   "vocal", "vogue", "vouch", "vowel", "vulva", "woken", "woman", "women", "worth", "wrote", "xenon", "yacht",
   "yield", "zebra", "zesty",
-  // ── Animals & living creatures ───────────────────────────────────────────────
+  // -- Animals & living creatures -----------------------------------------------
   "bee","ant","bat","cat","cow","dog","doe","eel","elk","ewe","fly","fox","gnu","hen","hog","jay","koi","owl","pig","ram","rat","yak","ape",
   "bear","bird","boar","buck","bull","calf","clam","colt","crab","crow","dart","deer","dove","duck","fawn","fish","flea","frog","gnat","goat","hare","hawk","ibis","kite","lamb","lark","lion","loon","lynx","mink","mole","moth","mule","newt","pony","prey","puma","snail","slug","swan","toad","vole","wasp","wren","worm",
   "adder","bison","cobra","coral","crane","eagle","finch","gecko","goose","grebe","heron","horse","hyena","koala","llama","leech","lemur","louse","macaw","midge","moose","otter","panda","perch","prawn","quail","raven","shark","sheep","shrew","skunk","sloth","snipe","squid","stork","swallow","tapir","tiger","trout","viper","whale","zebra",
   "badger","beaver","canary","donkey","falcon","ferret","gibbon","gopher","iguana","jaguar","lizard","locust","magpie","marten","mayfly","monkey","osprey","parrot","pigeon","plover","rabbit","reindeer","robins","salmon","seahorse","spider","stoat","thrush","toucan","turtle","walrus","weasel","condor",
   "buffalo","buzzard","cheetah","chicken","dolphin","gorilla","hamster","lobster","panther","pelican","penguin","piranha","platypus","porcupine","rooster","sparrow","termite","vulture","wildcat",
   "alligator","armadillo","chameleon","crocodile","dragonfly","flamingo","greyhound","hedgehog","jellyfish","ladybird","manatee","meerkat","mongoose","nighthawk","nightowl","octopus","opossum","parakeet","pheasant","porpoise","scorpion","starfish","stingray","tarantula","tortoise","treefrog","woodpecker",
-  // ── Plants, nature, environment ──────────────────────────────────────────────
+  // -- Plants, nature, environment ----------------------------------------------
   "oak","elm","ash","fir","ivy","bay","bud","bur","fen","fen","log","bog","mop","pod","sap","sod","fen",
   "aloe","bark","bulb","bush","cane","clod","corm","dune","fern","foam","glen","gust","hail","heap","herb","hill","husk","iris","kelp","knot","lake","lava","lawn","leaf","loam","loch","loft","mare","marsh","mead","mesa","mire","mist","moor","moss","muck","mudd","peak","peat","pine","pond","pool","pore","reef","rime","root","rose","rune","rush","sage","sand","seed","shoal","silt","sloe","soil","stem","stump","surf","tarn","thorn","tide","turf","vale","vine","weed","wood",
   "acorn","algae","alder","aspen","beach","birch","bloom","bluff","bough","brook","brush","cedar","chalk","cliff","clove","clump","coast","coral","creek","daisy","delta","drift","field","fjord","flint","flora","floss","foliage","forest","frost","fungi","glade","gorge","gourd","grain","grape","grass","gravel","grove","gulch","heath","holly","inlet","knoll","lilac","lilly","loess","maple","marsh","mauve","monte","mulch","nettle","night","ozone","patch","peach","plume","pollen","poppy","prism","ridge","river","scrub","sedge","shore","shrub","slope","smoke","snowy","solar","spine","spore","sprig","spruce","stalk","swamp","thorn","thyme","tulip","tundra","water","willow","woods",
@@ -147,20 +148,20 @@ export function getWordSet() {
   return Promise.resolve(WORD_SET);
 }
 
-export function buildWordFromTiles(tiles) {
+export function buildWordFromTiles(tiles: Tile[]): string {
   return tiles.map(t => getTileSound(t)).join("").toLowerCase();
 }
 
-export function checkWordInSet(word) {
+export function checkWordInSet(word: string): boolean {
   const w = word.toLowerCase();
   return WORD_SET.has(w) || SESSION_CUSTOM_WORDS.has(w);
 }
 
-export function addCustomWord(word) {
+export function addCustomWord(word: string): void {
   SESSION_CUSTOM_WORDS.add(word.toLowerCase());
 }
 
 // Session-local custom words added by the player (resets on page refresh)
-export const SESSION_CUSTOM_WORDS = new Set();
+export const SESSION_CUSTOM_WORDS = new Set<string>();
 
-// ─── HOVER WORD SMOKE SYSTEM ─────────────────────────────────────────────────
+// --- HOVER WORD SMOKE SYSTEM -------------------------------------------------

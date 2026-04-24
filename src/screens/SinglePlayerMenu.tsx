@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react';
-import { AudioEngine } from '../audio/AudioEngine.js';
+import { AudioEngine } from '../audio/AudioEngine';
 
-// ─── SINGLE PLAYER SUB-MENU ───────────────────────────────────────────────────
-export function SinglePlayerMenu({ onEndless, onTimed, onClassic, onBack }) {
+type SinglePlayerMenuProps = {
+  onEndless: () => void;
+  onTimed: () => void;
+  onClassic: () => void;
+  onBack: () => void;
+};
+
+// --- SINGLE PLAYER SUB-MENU ---------------------------------------------------
+export function SinglePlayerMenu({ onEndless, onTimed, onClassic, onBack }: SinglePlayerMenuProps) {
   const [entered, setEntered] = useState(false);
-  const [hovered, setHovered]   = useState(null);
+  const [hovered, setHovered]   = useState<string | null>(null);
 
   useEffect(() => { setTimeout(() => setEntered(true), 60); }, []);
 
@@ -13,7 +20,7 @@ export function SinglePlayerMenu({ onEndless, onTimed, onClassic, onBack }) {
       id: "endless",
       icon: "∞",
       label: "Endless Mode",
-      desc: "Build words round after round. No timer, no pressure — pure phonics zen.",
+      desc: "Build words round after round. No timer, no pressure - pure phonics zen.",
       color: "#f0c060",
       bg: "linear-gradient(135deg, #f0c06018, #f0c06006)",
       border: "#f0c06055",
@@ -195,7 +202,7 @@ export function SinglePlayerMenu({ onEndless, onTimed, onClassic, onBack }) {
                 <div style={{ fontSize:11, color:`${mode.color}88`, lineHeight:1.55 }}>{mode.desc}</div>
               </div>
               {/* Arrow indicator */}
-              <div style={{ marginLeft:"auto", fontSize:16, opacity: hovered === mode.id ? 1 : 0.2, transform: hovered === mode.id ? "translateX(3px)" : "translateX(0)", transition:"all 0.2s", color:mode.color }}>›</div>
+              <div style={{ marginLeft:"auto", fontSize:16, opacity: hovered === mode.id ? 1 : 0.2, transform: hovered === mode.id ? "translateX(3px)" : "translateX(0)", transition:"all 0.2s", color:mode.color }}>{'>'}</div>
             </button>
           ))}
         </div>

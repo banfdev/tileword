@@ -1,15 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { TILE_CATEGORIES, getTileSound, buildDeck, shuffle, freshTileId, parseTile } from '../data/tiles.js';
-import { WORD_LIST, SESSION_CUSTOM_WORDS, checkWordInSet, buildWordFromTiles, addCustomWord } from '../data/words.js';
-import { DEFAULT_SETTINGS } from '../data/settings.js';
-import { TILE_THEMES } from '../themes/tileThemes.js';
-import { AudioEngine } from '../audio/AudioEngine.js';
-import { Tile } from '../components/Tile.jsx';
-import { CheerBurst } from '../components/CheerBurst.jsx';
-import { WordSmokeCanvas, makeSmokeWord, getWordsForSound } from '../components/WordSmokeCanvas.jsx';
-import { Modal } from '../components/Modal.jsx';
+import { TILE_CATEGORIES, getTileSound, buildDeck, shuffle, freshTileId, parseTile } from '../data/tiles';
+import { WORD_LIST, SESSION_CUSTOM_WORDS, checkWordInSet, buildWordFromTiles, addCustomWord } from '../data/words';
+import { DEFAULT_SETTINGS } from '../data/settings';
+import type { Settings } from '../data/settings';
+import { TILE_THEMES } from '../themes/tileThemes';
+import { AudioEngine } from '../audio/AudioEngine';
+import { Tile } from '../components/Tile';
+import type { Tile as TileData } from '../data/tiles';
+import { CheerBurst } from '../components/CheerBurst';
+import { WordSmokeCanvas, makeSmokeWord, getWordsForSound } from '../components/WordSmokeCanvas';
+import type { SmokeWordData } from '../components/WordSmokeCanvas';
+import { Modal } from '../components/Modal';
 
-// ─── TIMED MODE ───────────────────────────────────────────────────────────────
+type ScoredWord = { word: string; pts: number; tiles: TileData[]; hinted: boolean; originalPts: number };
+
+// --- TIMED MODE ---------------------------------------------------------------
 const TIME_OPTIONS = [
   { label: "1 min",  seconds: 60 },
   { label: "2 min",  seconds: 120 },
@@ -17,39 +22,41 @@ const TIME_OPTIONS = [
   { label: "10 min", seconds: 600 },
 ];
 
-export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
+type GameProps = { onBackToTitle: () => void; settings?: Settings };
+
+export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }: GameProps) {
   // screens: "pick" | "play" | "done"
   const [phase, setPhase] = useState("pick");
   const [chosenTime, setChosenTime] = useState(120);
   const [timeLeft, setTimeLeft] = useState(120);
-  const [hand, setHand] = useState([]);
-  const [deck, setDeck] = useState([]);
+  const [hand, setHand] = useState<TileData[]>([]);
+  const [deck, setDeck] = useState<TileData[]>([]);
   const [deckIndex, setDeckIndex] = useState(0);
-  const [selected, setSelected] = useState([]);
+  const [selected, setSelected] = useState<TileData[]>([]);
   const [invalidShake, setInvalidShake] = useState(false);
-  const [wordsScored, setWordsScored] = useState([]);  // [{word, pts, tiles}]
+  const [wordsScored, setWordsScored] = useState<ScoredWord[]>([]);
   const [score, setScore] = useState(0);
   const [message, setMessage] = useState({ text: "", type: "" });
-  const [smokeWords, setSmokeWords] = useState([]);
+  const [smokeWords, setSmokeWords] = useState<SmokeWordData[]>([]);
   const [smokeEnabled, setSmokeEnabled] = useState(settings.smokeEffect);
   const [timedCheerKey, setTimedCheerKey] = useState(0);
-  const [highlightIds, setHighlightIds] = useState(new Set());
-  const [hintWords, setHintWords] = useState([]);
+  const [highlightIds, setHighlightIds] = useState(new Set<number>());
+  const [hintWords, setHintWords] = useState<Array<{ word: string; tileIds: number[] }>>([]);
   const [showHint, setShowHint] = useState(false);
-  const [challengeWord, setChallengeWord] = useState(null); // { word, tiles } — unknown word awaiting player decision
+  const [challengeWord, setChallengeWord] = useState<{ word: string; tiles: TileData[] } | null>(null);
 
-  const timerRef = useRef(null);
-  const spawnTimerRef = useRef(null);
-  const hoverTileRef = useRef(null);
-  const usedRecentlyRef = useRef(new Set());
-  const msgTimeout = useRef(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const spawnTimerRef = useRef<{ interval: ReturnType<typeof setInterval> | null; t1: ReturnType<typeof setTimeout> | null; t2: ReturnType<typeof setTimeout> | null }>({ interval: null, t1: null, t2: null });
+  const hoverTileRef = useRef<TileData | null>(null);
+  const usedRecentlyRef = useRef(new Set<string>());
+  const msgTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Refs for synchronous access in makeWord (avoid stale closures)
-  const deckRef = useRef([]);
+  const deckRef = useRef<TileData[]>([]);
   const deckIndexRef = useRef(0);
-  const handRef = useRef([]);
+  const handRef = useRef<TileData[]>([]);
 
-  // ── Start game ──────────────────────────────────────────────────────────────
-  const startGame = (secs) => {
+  // -- Start game --------------------------------------------------------------
+  const startGame = (secs: number) => {
     if (settings.soundEffects > 0) AudioEngine.play("gameStart");
     if (settings.soundEffects > 0) setTimeout(() => AudioEngine.play("dealTiles"), 400);
     const d = shuffle(buildDeck());
@@ -87,13 +94,13 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     AudioEngine.setSfxVolume(settings.soundEffects);
   }, [settings.soundEffects]);
 
-  // ── Countdown ───────────────────────────────────────────────────────────────
+  // -- Countdown ---------------------------------------------------------------
   useEffect(() => {
     if (phase !== "play") return;
     timerRef.current = setInterval(() => {
       setTimeLeft(t => {
         if (t <= 1) {
-          clearInterval(timerRef.current);
+          clearInterval(timerRef.current ?? undefined);
           setPhase("done");
           if (settings.soundEffects > 0) { AudioEngine.play("timeUp"); AudioEngine.play("sessionEnd"); }
           return 0;
@@ -102,22 +109,22 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
         return t - 1;
       });
     }, 1000);
-    return () => clearInterval(timerRef.current);
+    return () => clearInterval(timerRef.current ?? undefined);
   }, [phase]);
 
-  const fmt = (s) => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+  const fmt = (s: number) => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
   const pct = timeLeft / chosenTime;
   const timerColor = pct > 0.5 ? "#9EF01A" : pct > 0.25 ? "#F4A261" : "#E84855";
 
-  // ── Message ─────────────────────────────────────────────────────────────────
-  const showMsg = (text, type = "info") => {
+  // -- Message -----------------------------------------------------------------
+  const showMsg = (text: string, type = "info") => {
     if (msgTimeout.current) clearTimeout(msgTimeout.current);
     setMessage({ text, type });
     msgTimeout.current = setTimeout(() => setMessage({ text: "", type: "" }), 2500);
   };
 
-  // ── Tile interactions ────────────────────────────────────────────────────────
-  const toggleTile = (tile) => {
+  // -- Tile interactions --------------------------------------------------------
+  const toggleTile = (tile: TileData) => {
     if (settings.soundEffects > 0) AudioEngine.play("tileClick");
     setSelected(prev => {
       const already = prev.findIndex(t => t.id === tile.id);
@@ -127,20 +134,20 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     });
   };
 
-  const cycleVariant = (tile) => {
+  const cycleVariant = (tile: TileData) => {
     if (settings.soundEffects > 0) AudioEngine.play("tileCycle");
-    const cycle = t => (!t.variants || t.id !== tile.id) ? t
+    const cycle = (t: TileData) => (!t.variants || t.id !== tile.id) ? t
       : { ...t, activeVariant: (t.activeVariant + 1) % t.variants.length };
     setHand(prev => prev.map(cycle));
     setSelected(prev => prev.map(cycle));
   };
 
-  // ── Make Word (check + score in one step) ───────────────────────────────────
-  const scoreTimedWord = (word, tiles) => {
+  // -- Make Word (check + score in one step) -----------------------------------
+  const scoreTimedWord = (word: string, tiles: TileData[]) => {
     if (settings.soundEffects > 0) AudioEngine.play("wordCorrect");
+    const catBonus: Record<string, number> = { specials:5, r_vowel:4, double_vowel:3, others:2, main_consonants:1, open_vowel:1, closed_vowel:1 };
     const basePts = tiles.reduce((acc, t) => {
-      const b = { specials:5, r_vowel:4, double_vowel:3, others:2, main_consonants:1, open_vowel:1, closed_vowel:1 };
-      return acc + (b[t.category] || 1);
+      return acc + (catBonus[t.category] ?? 1);
     }, 0) * word.length;
     const usedHint = settings.hintPenalty && showHint && hintWords.some(h => h.word === word);
     const pts = usedHint ? Math.max(1, Math.floor(basePts / 2)) : basePts;
@@ -197,7 +204,7 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
 
   const clearSelection = () => { setSelected([]); };
 
-  // ── AUTO-MAKE WORD (timed mode) ──────────────────────────────────────────────
+  // -- AUTO-MAKE WORD (timed mode) ----------------------------------------------
   useEffect(() => {
     if (!settings.autoMakeWord || phase !== "play" || selected.length < 1) return;
     const word = buildWordFromTiles(selected);
@@ -208,15 +215,15 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, settings.autoMakeWord, phase]);
 
-  // ── Hint ────────────────────────────────────────────────────────────────────
+  // -- Hint --------------------------------------------------------------------
   const findHints = () => {
     const tileSounds = hand.map(tile => tile.variants
       ? tile.variants.map(v => ({ sound: v, tile }))
       : [{ sound: tile.text.replace(/-/g,""), tile }]);
-    const found = [];
+    const found: Array<{ word: string; tileIds: number[] }> = [];
     const used = new Set(wordsScored.map(w => w.word));
 
-    function matchWord(word, pos, usedFlags, ids) {
+    function matchWord(word: string, pos: number, usedFlags: boolean[], ids: number[]): { ok: boolean; ids: number[] } {
       if (pos === word.length) return { ok: true, ids: [...ids] };
       for (let i = 0; i < tileSounds.length; i++) {
         if (usedFlags[i]) continue;
@@ -229,7 +236,7 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
           }
         }
       }
-      return { ok: false };
+      return { ok: false, ids: [] };
     }
 
     const allWords = [...WORD_LIST, ...SESSION_CUSTOM_WORDS];
@@ -241,21 +248,21 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     }
     setHintWords(found);
     setShowHint(true);
-    if (found.length === 0) showMsg("No obvious words found — try cycling tiles!", "warn");
+    if (found.length === 0) showMsg("No obvious words found - try cycling tiles!", "warn");
   };
 
-  const highlightHint = (hint) => {
+  const highlightHint = (hint: { word: string; tileIds: number[] }) => {
     if (settings.soundEffects > 0) AudioEngine.play("hintReveal");
     setHighlightIds(new Set(hint.tileIds));
     setTimeout(() => setHighlightIds(new Set()), 3000);
   };
 
-  // ── Smoke ───────────────────────────────────────────────────────────────────
-  const removeWord = useCallback((id) => setSmokeWords(prev => prev.filter(w => w.id !== id)), []);
-  const handleTileHover = useCallback((tile, x, y) => {
-    clearInterval(spawnTimerRef.current);
-    clearTimeout(spawnTimerRef._t1);
-    clearTimeout(spawnTimerRef._t2);
+  // -- Smoke -------------------------------------------------------------------
+  const removeWord = useCallback((id: number) => setSmokeWords(prev => prev.filter(w => w.id !== id)), []);
+  const handleTileHover = useCallback((tile: TileData | null, x: number, y: number) => {
+    clearInterval(spawnTimerRef.current.interval ?? undefined);
+    clearTimeout(spawnTimerRef.current.t1 ?? undefined);
+    clearTimeout(spawnTimerRef.current.t2 ?? undefined);
     if (!tile || !smokeEnabled) { hoverTileRef.current = null; return; }
     hoverTileRef.current = tile;
     const color = TILE_CATEGORIES[tile.category].color;
@@ -263,27 +270,28 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     if (!wordPool.length) return;
     const spawnOne = () => {
       if (!hoverTileRef.current) return;
-      let word;
+      let word: string | undefined;
       for (let i=0;i<12;i++){
         word=wordPool[Math.floor(Math.random()*wordPool.length)];
         if(!usedRecentlyRef.current.has(word)) break;
       }
+      if (!word) return;
       usedRecentlyRef.current.add(word);
-      if(usedRecentlyRef.current.size>8){const f=usedRecentlyRef.current.values().next().value;usedRecentlyRef.current.delete(f);}
-      setSmokeWords(prev=>[...prev.slice(-16),makeSmokeWord(word,x,y,color)]);
+      if(usedRecentlyRef.current.size>8){const f=usedRecentlyRef.current.values().next().value as string;usedRecentlyRef.current.delete(f);}
+      setSmokeWords(prev=>[...prev.slice(-16),makeSmokeWord(word!,x,y,color)]);
     };
     spawnOne();
-    spawnTimerRef._t1=setTimeout(()=>{if(hoverTileRef.current)spawnOne();},700);
-    spawnTimerRef._t2=setTimeout(()=>{if(hoverTileRef.current)spawnOne();},1400);
-    spawnTimerRef.current=setInterval(spawnOne,1100);
+    spawnTimerRef.current.t1=setTimeout(()=>{if(hoverTileRef.current)spawnOne();},700);
+    spawnTimerRef.current.t2=setTimeout(()=>{if(hoverTileRef.current)spawnOne();},1400);
+    spawnTimerRef.current.interval=setInterval(spawnOne,1100);
   }, [smokeEnabled]);
 
-  // ── Stats for end screen ────────────────────────────────────────────────────
+  // -- Stats for end screen ----------------------------------------------------
   const longestWord = wordsScored.reduce((a,b)=>b.word.length>a.length?b.word:a,"");
-  const bestWord = wordsScored.reduce((a,b)=>b.pts>a.pts?b:a,{word:"—",pts:0});
+  const bestWord = wordsScored.reduce((a,b)=>b.pts>a.pts?b:a,{word:"-",pts:0});
   const avgLen = wordsScored.length ? (wordsScored.reduce((s,w)=>s+w.word.length,0)/wordsScored.length).toFixed(1) : 0;
 
-  // ─── PICK SCREEN ─────────────────────────────────────────────────────────────
+  // --- PICK SCREEN -------------------------------------------------------------
   if (phase === "pick") return (
     <div style={{
       minHeight:"100vh", background:"#0d0d14",
@@ -324,7 +332,7 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     </div>
   );
 
-  // ─── END SCREEN ──────────────────────────────────────────────────────────────
+  // --- END SCREEN --------------------------------------------------------------
   if (phase === "done") return (
     <div style={{
       minHeight:"100vh", background:"#0d0d14",
@@ -361,7 +369,7 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:24}}>
           {[
             ["Words", wordsScored.length],
-            ["Best Word", bestWord.word!=="—"?`${bestWord.word} (+${bestWord.pts})`:"-"],
+            ["Best Word", bestWord.word!=="-"?`${bestWord.word} (+${bestWord.pts})`:"-"],
             ["Longest", longestWord||"-"],
             ["Avg Length", avgLen||"-"],
             ["Top Score", bestWord.pts||0],
@@ -427,10 +435,10 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
     </div>
   );
 
-  // ─── PLAY SCREEN ─────────────────────────────────────────────────────────────
+  // --- PLAY SCREEN -------------------------------------------------------------
   const wordPreview = selected.map(t=>getTileSound(t)).join("").toLowerCase();
-  const msgColors = {success:"#c8ff5a",error:"#ff6b78",warn:"#ffbe85",info:"#5de8e0"};
-  const msgBg = {success:"#9EF01A22",error:"#E8485522",warn:"#F4A26122",info:"#2EC4B622"};
+  const msgColors: Record<string, string> = {success:"#c8ff5a",error:"#ff6b78",warn:"#ffbe85",info:"#5de8e0"};
+  const msgBg: Record<string, string> = {success:"#9EF01A22",error:"#E8485522",warn:"#F4A26122",info:"#2EC4B622"};
 
   const _th = TILE_THEMES[settings.tileTheme] || TILE_THEMES.neon;
   return (
@@ -524,7 +532,7 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
           <div style={{background:"#ffffff06",border:"1px solid #ffffff10",borderRadius:14,padding:"14px 18px",marginBottom:16}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.14em",color:"#ffffff44"}}>
-                Word Builder — {selected.length} tile{selected.length!==1?"s":""}
+                Word Builder - {selected.length} tile{selected.length!==1?"s":""}
               </div>
               <div style={{fontSize:10,color:settings.autoMakeWord?"#9EF01A88":"#ffffff22",letterSpacing:"0.1em"}}>
                 {settings.autoMakeWord ? "⚡ Auto-on" : "Manual mode"}
@@ -533,7 +541,7 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
             <div style={{display:"flex",flexWrap:"wrap",gap:7,minHeight:48,alignItems:"center",background:"#ffffff03",borderRadius:10,padding:"8px 10px",border:selected.length>0?"1px solid #ffffff14":"1px dashed #ffffff0a",marginBottom:selected.length>0?8:0}}>
               {selected.length===0
                 ? <div style={{color:"#ffffff18",fontSize:13,fontStyle:"italic"}}>Click tiles below…</div>
-                : selected.map(t=><Tile key={t.id} tile={t} selected onClick={()=>toggleTile(t)} onCycleVariant={cycleVariant} onHover={handleTileHover} small/>)
+                : selected.map(t=><Tile key={t.id} tile={t} selected onClick={()=>toggleTile(t)} onCycleVariant={cycleVariant} onHover={handleTileHover} small theme={settings.tileTheme}/>)
               }
             </div>
             {selected.length>0&&(
@@ -587,7 +595,7 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }) {
             )}
           </div>
 
-          {/* 24-tile hand — 4 rows of 6 */}
+          {/* 24-tile hand - 4 rows of 6 */}
           <div style={{background:"#ffffff06",border:"1px solid #ffffff10",borderRadius:14,padding:"14px 18px"}}>
             <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.14em",color:"#ffffff44",marginBottom:12}}>
               Your 24 Tiles
