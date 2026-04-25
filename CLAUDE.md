@@ -74,4 +74,4 @@ No login. Instant play. Mahjong meets language learning.
 
 ## Deployment
 - GitHub Pages via CI/CD
-- fenghebonjour.github.io/tileword
+- banfdev.github.io/tileword
