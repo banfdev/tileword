@@ -2,14 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>TileWord – Phonics Mahjong</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;800;900&display=swap" rel="stylesheet">
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-      body { background: #0d0d14; }
+      body { background: #0d0d14; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+      button { touch-action: manipulation; }
       input[type=range] {
         -webkit-appearance: none; appearance: none;
         height: 4px; border-radius: 2px;
@@ -27,7 +28,7 @@
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
     </style>
-    <script type="module" crossorigin src="/tileword/assets/index-D9CWEYBZ.js"></script>
+    <script type="module" crossorigin src="/tileword/assets/index-sr984osL.js"></script>
   </head>
   <body>
     <div id="root"></div>
