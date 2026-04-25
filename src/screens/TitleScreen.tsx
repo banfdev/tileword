@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useWindowSize } from '../hooks/useWindowSize';
 import { TILE_CATEGORIES, getTileSound, buildDeck, shuffle, freshTileId, parseTile } from '../data/tiles';
 import { WORD_LIST, SESSION_CUSTOM_WORDS, checkWordInSet, buildWordFromTiles, addCustomWord } from '../data/words';
 import { DEFAULT_SETTINGS } from '../data/settings';
@@ -19,6 +20,8 @@ type TitleScreenProps = {
 };
 
 export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }: TitleScreenProps) {
+  const vw = useWindowSize();
+  const isMobile = vw < 640;
   const [modal, setModal] = useState<"rules" | "credits" | "settings" | null>(null);
   const [entered, setEntered] = useState(false);
   const [wordImport, setWordImport] = useState(""); // textarea value for bulk word import
@@ -190,7 +193,7 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }: Ti
 
           <div style={{
             fontFamily: "'Noto Serif SC', serif",
-            fontSize: 52,
+            fontSize: isMobile ? 38 : 52,
             fontWeight: 900,
             letterSpacing: "0.04em",
             lineHeight: 1,
@@ -205,7 +208,7 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }: Ti
           </div>
           <div style={{
             fontFamily: "'Noto Serif SC', serif",
-            fontSize: 52,
+            fontSize: isMobile ? 38 : 52,
             fontWeight: 900,
             letterSpacing: "0.04em",
             lineHeight: 1,
@@ -229,7 +232,7 @@ export function TitleScreen({ onPlay, onPlayTimed, settings, updateSetting }: Ti
         {/* Menu buttons */}
         <div style={{
           display: "flex", flexDirection: "column", gap: 12,
-          width: 340,
+          width: isMobile ? `calc(100vw - 32px)` : 340,
         }}>
           {[
             {

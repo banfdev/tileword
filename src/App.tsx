@@ -43,7 +43,7 @@ export default function App() {
   }
 
   return (
-    <div onClick={handleUnlock} onKeyDown={handleUnlock} style={{ outline: "none" }}>
+    <div onClick={handleUnlock} onTouchStart={handleUnlock} onKeyDown={handleUnlock} style={{ outline: "none" }}>
       {content}
     </div>
   );

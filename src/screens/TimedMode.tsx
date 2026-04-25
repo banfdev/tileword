@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useWindowSize } from '../hooks/useWindowSize';
 import { TILE_CATEGORIES, getTileSound, buildDeck, shuffle, freshTileId, parseTile } from '../data/tiles';
 import { WORD_LIST, SESSION_CUSTOM_WORDS, checkWordInSet, buildWordFromTiles, addCustomWord } from '../data/words';
 import { DEFAULT_SETTINGS } from '../data/settings';
@@ -25,6 +26,8 @@ const TIME_OPTIONS = [
 type GameProps = { onBackToTitle: () => void; settings?: Settings };
 
 export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }: GameProps) {
+  const vw = useWindowSize();
+  const isMobile = vw < 640;
   // screens: "pick" | "play" | "done"
   const [phase, setPhase] = useState("pick");
   const [chosenTime, setChosenTime] = useState(120);
@@ -306,7 +309,7 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }: GamePr
         <div style={{fontSize:13,color:"#ffffff55",marginBottom:40,letterSpacing:"0.12em",textTransform:"uppercase"}}>24 tiles · Auto-replace · Race the clock</div>
 
         <div style={{fontSize:13,color:"#ffffff77",marginBottom:18,letterSpacing:"0.1em",textTransform:"uppercase"}}>Choose your time limit</div>
-        <div style={{display:"flex",gap:14,justifyContent:"center",marginBottom:44}}>
+        <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap",marginBottom:44}}>
           {TIME_OPTIONS.map(opt => (
             <button key={opt.seconds} onClick={()=>startGame(opt.seconds)} style={{
               padding:"18px 28px", borderRadius:14,
@@ -366,7 +369,7 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }: GamePr
         </div>
 
         {/* Stat grid */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:24}}>
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:12,marginBottom:24}}>
           {[
             ["Words", wordsScored.length],
             ["Best Word", bestWord.word!=="-"?`${bestWord.word} (+${bestWord.pts})`:"-"],
@@ -455,52 +458,58 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }: GamePr
       {/* Header */}
       <div style={{
         borderBottom:`1px solid ${_th.headerBorder}`,background:_th.headerBg,
-        backdropFilter:"blur(12px)",padding:"12px 24px",
+        backdropFilter:"blur(12px)",padding: isMobile ? "10px 14px" : "12px 24px",
         display:"flex",alignItems:"center",justifyContent:"space-between",
         position:"sticky",top:0,zIndex:100,
       }}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <div style={{display:"flex",alignItems:"center",gap: isMobile ? 8 : 12}}>
           <button onClick={() => { AudioEngine.play("backToMenu"); onBackToTitle(); }} style={{
             background:"#ffffff08",border:"1px solid #ffffff18",
             color:"#ffffff88",borderRadius:10,padding:"7px 14px",
             cursor:"pointer",fontSize:12,fontWeight:700,
             display:"flex",alignItems:"center",gap:6,
             flexShrink:0,transition:"all 0.15s",letterSpacing:"0.06em",
-          }}>🚪 Home</button>
-          <div style={{fontSize:22}}>⏱</div>
-          <div>
-            <div style={{fontFamily:"'Noto Serif SC',serif",fontSize:18,fontWeight:800,color:"#E84855",letterSpacing:"0.06em"}}>Timed Mode</div>
-            <div style={{fontSize:10,color:"#ffffff44",letterSpacing:"0.1em",textTransform:"uppercase"}}>24 tiles · Auto-replace</div>
-          </div>
+          }}>🚪{!isMobile && " Home"}</button>
+          {!isMobile && <div style={{fontSize:22}}>⏱</div>}
+          {!isMobile && (
+            <div>
+              <div style={{fontFamily:"'Noto Serif SC',serif",fontSize:18,fontWeight:800,color:"#E84855",letterSpacing:"0.06em"}}>Timed Mode</div>
+              <div style={{fontSize:10,color:"#ffffff44",letterSpacing:"0.1em",textTransform:"uppercase"}}>24 tiles · Auto-replace</div>
+            </div>
+          )}
         </div>
 
         {/* Big countdown */}
         <div style={{
-          fontFamily:"monospace",fontSize:38,fontWeight:900,
+          fontFamily:"monospace",fontSize: isMobile ? 28 : 38,fontWeight:900,
           color:timerColor,letterSpacing:"0.1em",
           textShadow:`0 0 20px ${timerColor}88`,
           animation: pct < 0.17 ? "timerPulse 0.8s ease infinite" : "none",
           transition:"color 0.5s",
         }}>{fmt(timeLeft)}</div>
 
-        <div style={{display:"flex",gap:14,alignItems:"center"}}>
+        <div style={{display:"flex",gap: isMobile ? 8 : 14,alignItems:"center"}}>
           <div style={{textAlign:"center"}}>
             <div style={{fontSize:10,color:"#ffffff44",textTransform:"uppercase",letterSpacing:"0.1em"}}>Score</div>
-            <div style={{fontSize:22,fontWeight:700,color:"#9EF01A",fontFamily:"monospace"}}>{score}</div>
+            <div style={{fontSize: isMobile ? 18 : 22,fontWeight:700,color:"#9EF01A",fontFamily:"monospace"}}>{score}</div>
           </div>
           <div style={{width:1,height:32,background:"#ffffff15"}}/>
           <div style={{textAlign:"center"}}>
             <div style={{fontSize:10,color:"#ffffff44",textTransform:"uppercase",letterSpacing:"0.1em"}}>Words</div>
-            <div style={{fontSize:22,fontWeight:700,color:"#f0c060",fontFamily:"monospace"}}>{wordsScored.length}</div>
+            <div style={{fontSize: isMobile ? 18 : 22,fontWeight:700,color:"#f0c060",fontFamily:"monospace"}}>{wordsScored.length}</div>
           </div>
-          <div style={{width:1,height:32,background:"#ffffff15"}}/>
-          <button onClick={()=>setSmokeEnabled(v=>!v)} style={{
-            background:smokeEnabled?"linear-gradient(135deg,#2EC4B622,#2EC4B611)":"#ffffff08",
-            border:smokeEnabled?"1px solid #2EC4B655":"1px solid #ffffff18",
-            color:smokeEnabled?"#5de8e0":"#ffffff33",
-            borderRadius:8,padding:"5px 12px",cursor:"pointer",fontSize:11,
-            fontWeight:700,transition:"all 0.2s",letterSpacing:"0.06em",
-          }}>{smokeEnabled?"💨 ON":"💨 OFF"}</button>
+          {!isMobile && (
+            <>
+              <div style={{width:1,height:32,background:"#ffffff15"}}/>
+              <button onClick={()=>setSmokeEnabled(v=>!v)} style={{
+                background:smokeEnabled?"linear-gradient(135deg,#2EC4B622,#2EC4B611)":"#ffffff08",
+                border:smokeEnabled?"1px solid #2EC4B655":"1px solid #ffffff18",
+                color:smokeEnabled?"#5de8e0":"#ffffff33",
+                borderRadius:8,padding:"5px 12px",cursor:"pointer",fontSize:11,
+                fontWeight:700,transition:"all 0.2s",letterSpacing:"0.06em",
+              }}>{smokeEnabled?"💨 ON":"💨 OFF"}</button>
+            </>
+          )}
         </div>
       </div>
 
@@ -518,14 +527,14 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }: GamePr
       {/* Message */}
       {message.text && (
         <div style={{
-          margin:"10px 20px 0",padding:"9px 16px",borderRadius:10,
+          margin: isMobile ? "8px 14px 0" : "10px 20px 0",padding:"9px 16px",borderRadius:10,
           background:msgBg[message.type]||"#ffffff11",
           border:`1px solid ${(msgBg[message.type]||"#ffffff22").replace("22","55")}`,
           fontSize:13,color:msgColors[message.type]||"#e0e0f0",fontWeight:500,
         }}>{message.text}</div>
       )}
 
-      <div style={{display:"flex",gap:18,padding:"16px 20px 0",alignItems:"flex-start"}}>
+      <div style={{display:"flex",flexDirection: isMobile ? "column" : "row",gap:18,padding: isMobile ? "10px 14px 0" : "16px 20px 0",alignItems:"flex-start"}}>
         {/* Main area */}
         <div style={{flex:1}}>
           {/* Word builder */}
@@ -621,7 +630,7 @@ export function TimedMode({ onBackToTitle, settings = DEFAULT_SETTINGS }: GamePr
         </div>
 
         {/* Right panel */}
-        <div style={{width:210,flexShrink:0}}>
+        <div style={{width: isMobile ? "100%" : 210,flexShrink:0}}>
           {/* Hint */}
           <div style={{marginBottom:12}}>
             <button onClick={findHints} style={{

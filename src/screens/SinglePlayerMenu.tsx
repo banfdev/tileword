@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useWindowSize } from '../hooks/useWindowSize';
 import { AudioEngine } from '../audio/AudioEngine';
 
 type SinglePlayerMenuProps = {
@@ -10,6 +11,8 @@ type SinglePlayerMenuProps = {
 
 // --- SINGLE PLAYER SUB-MENU ---------------------------------------------------
 export function SinglePlayerMenu({ onEndless, onTimed, onClassic, onBack }: SinglePlayerMenuProps) {
+  const vw = useWindowSize();
+  const isMobile = vw < 640;
   const [entered, setEntered] = useState(false);
   const [hovered, setHovered]   = useState<string | null>(null);
 
@@ -145,7 +148,7 @@ export function SinglePlayerMenu({ onEndless, onTimed, onClassic, onBack }: Sing
         opacity: entered ? 1 : 0,
         animation: entered ? "spFadeIn 0.6s cubic-bezier(0.16,1,0.3,1) both" : "none",
         display: "flex", flexDirection: "column", alignItems: "center", gap: 32,
-        width: 400,
+        width: isMobile ? "calc(100vw - 32px)" : 400,
       }}>
         {/* Header */}
         <div style={{ textAlign:"center" }}>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useWindowSize } from '../hooks/useWindowSize';
 import { TILE_CATEGORIES, getTileSound, buildDeck, shuffle, freshTileId, parseTile } from '../data/tiles';
 import { WORD_LIST, SESSION_CUSTOM_WORDS, checkWordInSet, buildWordFromTiles, addCustomWord } from '../data/words';
 import { DEFAULT_SETTINGS } from '../data/settings';
@@ -18,6 +19,8 @@ type ChallengeWord = { word: string; tiles: TileData[] };
 type GameProps = { onBackToTitle: () => void; settings?: Settings };
 
 export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS }: GameProps) {
+  const vw = useWindowSize();
+  const isMobile = vw < 640;
   const [deck, setDeck] = useState(() => shuffle(buildDeck()));
   const [hand, setHand] = useState<TileData[]>([]);
   const [selected, setSelected] = useState<TileData[]>([]);
@@ -436,13 +439,13 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
         borderBottom: `1px solid ${_th.headerBorder}`,
         background: _th.headerBg,
         backdropFilter: "blur(12px)",
-        padding: "14px 28px",
+        padding: isMobile ? "10px 14px" : "14px 28px",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         position: "sticky", top: 0, zIndex: 100,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
           {onBackToTitle && (
             <button
               onClick={() => { AudioEngine.play("backToMenu"); onBackToTitle(); }}
@@ -456,43 +459,49 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
                 letterSpacing: "0.06em",
               }}
             >
-              🚪 Home
+              🚪{!isMobile && " Home"}
             </button>
           )}
-          <div style={{ fontSize: 28 }}>🀄</div>
-          <div>
-            <div style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 20, fontWeight: 800, letterSpacing: "0.06em", color: "#f0c060" }}>
-              Phonics Mahjong
+          {!isMobile && <div style={{ fontSize: 28 }}>🀄</div>}
+          {!isMobile && (
+            <div>
+              <div style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 20, fontWeight: 800, letterSpacing: "0.06em", color: "#f0c060" }}>
+                Phonics Mahjong
+              </div>
+              <div style={{ fontSize: 11, color: "#ffffff55", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                Word Building Game
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: "#ffffff55", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-              Word Building Game
-            </div>
-          </div>
+          )}
         </div>
-        <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: isMobile ? 8 : 20, alignItems: "center" }}>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: "#ffffff44", textTransform: "uppercase", letterSpacing: "0.1em" }}>Round</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#f0c060", fontFamily: "monospace" }}>{round}</div>
+            <div style={{ fontSize: 11, color: "#ffffff44", textTransform: "uppercase", letterSpacing: "0.1em" }}>{isMobile ? "RND" : "Round"}</div>
+            <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, color: "#f0c060", fontFamily: "monospace" }}>{round}</div>
           </div>
           <div style={{ width: 1, height: 36, background: "#ffffff15" }} />
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: 11, color: "#ffffff44", textTransform: "uppercase", letterSpacing: "0.1em" }}>Score</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#9EF01A", fontFamily: "monospace" }}>{score}</div>
+            <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, color: "#9EF01A", fontFamily: "monospace" }}>{score}</div>
           </div>
           <div style={{ width: 1, height: 36, background: "#ffffff15" }} />
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: "#ffffff44", textTransform: "uppercase", letterSpacing: "0.1em" }}>Tiles Left</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#2EC4B6", fontFamily: "monospace" }}>{deck.length - deckIndex}</div>
+            <div style={{ fontSize: 11, color: "#ffffff44", textTransform: "uppercase", letterSpacing: "0.1em" }}>{isMobile ? "LEFT" : "Tiles Left"}</div>
+            <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700, color: "#2EC4B6", fontFamily: "monospace" }}>{deck.length - deckIndex}</div>
           </div>
-          <div style={{ width: 1, height: 36, background: "#ffffff15" }} />
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: "#ffffff44", textTransform: "uppercase", letterSpacing: "0.1em" }}>Dictionary</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: dictReady ? "#9EF01A" : "#F4A261", fontFamily: "monospace", marginTop: 3 }}>
-              {dictReady ? "✓ 20k Ready" : (
-                <span style={{ display: "inline-block", animation: "spin 0.8s linear infinite" }}>⟳</span>
-              )}
-            </div>
-          </div>
+          {!isMobile && (
+            <>
+              <div style={{ width: 1, height: 36, background: "#ffffff15" }} />
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#ffffff44", textTransform: "uppercase", letterSpacing: "0.1em" }}>Dictionary</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: dictReady ? "#9EF01A" : "#F4A261", fontFamily: "monospace", marginTop: 3 }}>
+                  {dictReady ? "✓ 20k Ready" : (
+                    <span style={{ display: "inline-block", animation: "spin 0.8s linear infinite" }}>⟳</span>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
           <button
             onClick={() => setShowRules(r => !r)}
             style={{
@@ -501,7 +510,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
               cursor: "pointer", fontSize: 12, letterSpacing: "0.06em",
             }}
           >
-            {showRules ? "Hide" : "Rules"}
+            {isMobile ? "?" : (showRules ? "Hide" : "Rules")}
           </button>
           <button
             onClick={resetGame}
@@ -514,7 +523,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
               fontWeight: 700,
             }}
           >
-            🔄 Reset
+            {isMobile ? "🔄" : "🔄 Reset"}
           </button>
         </div>
       </div>
@@ -522,7 +531,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
       {/* Rules Panel */}
       {showRules && (
         <div style={{
-          margin: "16px 24px 0",
+          margin: isMobile ? "10px 14px 0" : "16px 24px 0",
           background: "#ffffff06",
           border: "1px solid #ffffff12",
           borderRadius: 12,
@@ -558,7 +567,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
       {/* Message Banner */}
       {message.text && (
         <div style={{
-          margin: "12px 24px 0",
+          margin: isMobile ? "8px 14px 0" : "12px 24px 0",
           padding: "10px 18px",
           borderRadius: 10,
           background: {
@@ -588,7 +597,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
       )}
 
       {/* -- WORDS SCORED - Mahjong discard row, above the board ---------------- */}
-      <div style={{ padding: "16px 24px 0" }}>
+      <div style={{ padding: isMobile ? "10px 14px 0" : "16px 24px 0" }}>
         <div style={{
           background: "#ffffff05",
           border: "1px solid #ffffff0d",
@@ -636,7 +645,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
       </div>
 
       {/* -- MAIN BOARD AREA ----------------------------------------------------- */}
-      <div style={{ display: "flex", gap: 18, padding: "14px 24px 0", alignItems: "flex-start" }}>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 18, padding: isMobile ? "10px 14px 0" : "14px 24px 0", alignItems: "flex-start" }}>
 
         {/* Left: Word Builder + Hand */}
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -794,6 +803,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
                     onCycleVariant={cycleVariant}
                     onHover={handleTileHover}
                     disabled={animating}
+                    small={isMobile}
                     theme={settings.tileTheme}
                     animated={settings.tileAnimations}
                     showLabel={settings.soundLabels}
@@ -805,7 +815,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
         </div>
 
         {/* Right Panel - compact controls */}
-        <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ width: isMobile ? "100%" : 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
 
           {/* End Round */}
           <button
@@ -909,6 +919,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
           </div>
 
           {/* Category Legend */}
+          {!isMobile && (
           <div style={{
             background: "#ffffff05", border: "1px solid #ffffff0d",
             borderRadius: 14, padding: "12px 14px",
@@ -923,6 +934,7 @@ export function MahjongPhonicsGame({ onBackToTitle, settings = DEFAULT_SETTINGS 
               </div>
             ))}
           </div>
+          )}
         </div>
       </div>
       <WordSmokeCanvas words={smokeWords} onWordDone={removeWord} />
