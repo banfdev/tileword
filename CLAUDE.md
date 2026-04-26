@@ -75,3 +75,50 @@ No login. Instant play. Mahjong meets language learning.
 ## Deployment
 - GitHub Pages via CI/CD
 - banfdev.github.io/tileword
+
+## Core Philosophy
+Tiles represent SOUNDS not letters.
+Minimalist — complexity is the enemy. Player must feel smart immediately.
+Inspired by Hangman but teaches pronunciation through sound-building.
+The best phonics game on GitHub Pages.
+No login. No timer. No lives. Instant play.
+
+## The ~83 Tile System
+- Single vowels: a e i o u
+- Vowel combos: ai ay ea ee ie oa oe oo ou ow ue ui eu oi oy au aw
+- R-controlled: ar er ir or ur
+- Blends: bl br ch cl cr dr fl fr gl gr pl pr sh sk sl sm sn sp st str sw th tr tw wh wr
+- Endings: ck ng nk tch dge le tion ing
+- Prefixes: re pre un dis out over
+- Single consonants: b c d f g h j k l m n p r s t v w x y z
+
+## Tile Tiers (critical)
+- Tier 1 PERFECT: t+ea+m = team (pure phonics, use these)
+- Tier 2 GOOD: g+ar+f+ie+ld = garfield (acceptable)
+- Tier 3 AVOID: g+u+l+l+i+b+i+l+i+t+y = gullibility (meaningless, never include)
+
+## Level Progression
+- Level 1: ea → t ea m p ch r b n → tea eat team each teach beach bean
+- Level 2: ee → t ee f r s n gr qu → see tree free green queen
+- Level 3: ea + ee → player discovers both say "ee" 🤯
+- Level 4: ai + ay → rain clay play train (same sound different spelling)
+- Level 5: ar or er → car corn teacher (bossy R)
+- Level 6: blends → bl+ea=bleat tr+ee=tree str+ea+m=stream
+- Level 7: free build, all tiles weighted by frequency
+
+## Gameplay
+- 8 curated tiles per level
+- Player builds as many words as possible
+- Each tile click plays its sound
+- Completed word plays full pronunciation
+
+## NLP Sound Map
+ea=ee, ee=ee, ai=ay, ay=ay, oa=oh, oo=oo, ar=ar, er=ur, ir=ur, or=or
+ch=ch, sh=sh, th=th, str=str
+Single consonants: t=tuh, m=muh, p=puh, b=buh etc.
+
+## Tech Stack
+React TSX, Vite, GitHub Pages, no backend, no login
+
+## Success Criteria
+A 6-year-old picks it up in 30 seconds.

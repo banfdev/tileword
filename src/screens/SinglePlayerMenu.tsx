@@ -3,6 +3,7 @@ import { useWindowSize } from '../hooks/useWindowSize';
 import { AudioEngine } from '../audio/AudioEngine';
 
 type SinglePlayerMenuProps = {
+  onJourney: () => void;
   onEndless: () => void;
   onTimed: () => void;
   onClassic: () => void;
@@ -10,7 +11,7 @@ type SinglePlayerMenuProps = {
 };
 
 // --- SINGLE PLAYER SUB-MENU ---------------------------------------------------
-export function SinglePlayerMenu({ onEndless, onTimed, onClassic, onBack }: SinglePlayerMenuProps) {
+export function SinglePlayerMenu({ onJourney, onEndless, onTimed, onClassic, onBack }: SinglePlayerMenuProps) {
   const vw = useWindowSize();
   const isMobile = vw < 640;
   const [entered, setEntered] = useState(false);
@@ -20,6 +21,17 @@ export function SinglePlayerMenu({ onEndless, onTimed, onClassic, onBack }: Sing
 
   const modes = [
     {
+      id: "journey",
+      icon: "🎓",
+      label: "Phonics Journey",
+      desc: "Learn phonics step by step. 7 levels, 8 tiles each. No timer. No lives. Just words.",
+      color: "#2EC4B6",
+      bg: "linear-gradient(135deg, #2EC4B618, #2EC4B606)",
+      border: "#2EC4B655",
+      badge: "START HERE",
+      onClick: () => { AudioEngine.play("modeSelect"); onJourney(); },
+    },
+    {
       id: "endless",
       icon: "∞",
       label: "Endless Mode",
@@ -27,6 +39,7 @@ export function SinglePlayerMenu({ onEndless, onTimed, onClassic, onBack }: Sing
       color: "#f0c060",
       bg: "linear-gradient(135deg, #f0c06018, #f0c06006)",
       border: "#f0c06055",
+      badge: null,
       onClick: () => { AudioEngine.play("modeSelect"); onEndless(); },
     },
     {
@@ -37,6 +50,7 @@ export function SinglePlayerMenu({ onEndless, onTimed, onClassic, onBack }: Sing
       color: "#E84855",
       bg: "linear-gradient(135deg, #E8485518, #E8485506)",
       border: "#E8485555",
+      badge: null,
       onClick: () => { AudioEngine.play("modeSelect"); onTimed(); },
     },
     {
@@ -47,6 +61,7 @@ export function SinglePlayerMenu({ onEndless, onTimed, onClassic, onBack }: Sing
       color: "#C77DFF",
       bg: "linear-gradient(135deg, #C77DFF18, #C77DFF06)",
       border: "#C77DFF55",
+      badge: null,
       onClick: () => { AudioEngine.play("modeSelect"); onClassic(); },
     },
   ];
@@ -200,12 +215,22 @@ export function SinglePlayerMenu({ onEndless, onTimed, onClassic, onBack }: Sing
                 animation: hovered === mode.id ? "iconBounce 0.6s ease" : "none",
                 minWidth:40, textAlign:"center",
               }}>{mode.icon}</div>
-              <div>
-                <div style={{ fontFamily:"'Noto Serif SC',serif", fontSize:17, fontWeight:800, marginBottom:4 }}>{mode.label}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                  <span style={{ fontFamily:"'Noto Serif SC',serif", fontSize:17, fontWeight:800 }}>{mode.label}</span>
+                  {mode.badge && (
+                    <span style={{
+                      fontSize:8, fontWeight:900, letterSpacing:"0.14em",
+                      color: mode.color, background:`${mode.color}22`,
+                      border:`1px solid ${mode.color}55`,
+                      borderRadius:4, padding:"2px 6px",
+                    }}>{mode.badge}</span>
+                  )}
+                </div>
                 <div style={{ fontSize:11, color:`${mode.color}88`, lineHeight:1.55 }}>{mode.desc}</div>
               </div>
               {/* Arrow indicator */}
-              <div style={{ marginLeft:"auto", fontSize:16, opacity: hovered === mode.id ? 1 : 0.2, transform: hovered === mode.id ? "translateX(3px)" : "translateX(0)", transition:"all 0.2s", color:mode.color }}>{'>'}</div>
+              <div style={{ fontSize:16, opacity: hovered === mode.id ? 1 : 0.2, transform: hovered === mode.id ? "translateX(3px)" : "translateX(0)", transition:"all 0.2s", color:mode.color }}>{'>'}</div>
             </button>
           ))}
         </div>
