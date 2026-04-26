@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useWindowSize } from '../hooks/useWindowSize';
 import { PHONICS_LEVELS, makeLevelTiles } from '../data/levels';
-import { checkWordInSet } from '../data/words';
-import { getTileSound, TILE_CATEGORIES } from '../data/tiles';
+import { checkWordInSet, addCustomWord } from '../data/words';
+import { getTileSound } from '../data/tiles';
 import type { Tile, TileCategoryKey } from '../data/tiles';
 import { AudioEngine } from '../audio/AudioEngine';
+import { validateWithGrok } from '../api/grokValidator';
+import type { GrokWordInfo } from '../api/grokValidator';
 
 // From CLAUDE.md NLP Sound Map
 const PHONEME_SPEECH: Record<string, string> = {
@@ -64,6 +66,8 @@ export function PhonicsJourneyGame({ onBack }: Props) {
   const [builderIds, setBuilderIds]   = useState<number[]>([]);
   const [foundWords, setFoundWords]   = useState<string[]>([]);
   const [feedback, setFeedback]       = useState<{ msg: string; ok: boolean } | null>(null);
+  const [wordInfo, setWordInfo]       = useState<(GrokWordInfo & { word: string }) | null>(null);
+  const [checking, setChecking]       = useState(false);
   const [shaking, setShaking]         = useState(false);
   const [popping, setPopping]         = useState(false);
   const [entered, setEntered]         = useState(false);
@@ -75,12 +79,28 @@ export function PhonicsJourneyGame({ onBack }: Props) {
   const builderTiles = builderIds.map(id => tiles.find(t => t.id === id)!).filter(Boolean);
   const currentWord  = builderTiles.map(t => getTileSound(t)).join('');
 
+  const acceptWord = (word: string, newList: string[]) => {
+    setFoundWords(newList);
+    speakWord(word);
+    AudioEngine.play('wordCorrect');
+    setPopping(true);
+    setTimeout(() => setPopping(false), 600);
+    setFeedback({ msg: `✓ ${word}!`, ok: true });
+    setTimeout(() => setFeedback(null), 2500);
+    setBuilderIds([]);
+    // fetch Grok info in background for every accepted word
+    validateWithGrok(word).then(info => {
+      if (info?.valid) setWordInfo({ ...info, word });
+    });
+  };
+
   const goToLevel = (idx: number) => {
     setLevelIdx(idx);
     setTiles(makeLevelTiles(PHONICS_LEVELS[idx].tileTexts));
     setBuilderIds([]);
     setFoundWords([]);
     setFeedback(null);
+    setWordInfo(null);
     AudioEngine.play('gameStart');
   };
 
@@ -101,7 +121,7 @@ export function PhonicsJourneyGame({ onBack }: Props) {
   const handleClear = () => { setBuilderIds([]); setFeedback(null); };
 
   const handleSubmit = useCallback(() => {
-    if (builderTiles.length < 2) return;
+    if (builderTiles.length < 2 || checking) return;
     const word = currentWord;
 
     if (foundWords.includes(word)) {
@@ -112,21 +132,31 @@ export function PhonicsJourneyGame({ onBack }: Props) {
     }
 
     if (checkWordInSet(word)) {
-      setFoundWords(ws => [...ws, word]);
-      speakWord(word);
-      AudioEngine.play('wordCorrect');
-      setPopping(true);
-      setTimeout(() => setPopping(false), 600);
-      setFeedback({ msg: `✓ ${word}!`, ok: true });
-      setTimeout(() => setFeedback(null), 2500);
-      setBuilderIds([]);
+      acceptWord(word, [...foundWords, word]);
     } else {
-      setShaking(true);
-      AudioEngine.play('wordWrong');
-      setFeedback({ msg: `"${word}" — not a word`, ok: false });
-      setTimeout(() => { setShaking(false); setFeedback(null); }, 2200);
+      // Grok fallback: validate words not in local dictionary
+      setChecking(true);
+      setFeedback({ msg: 'Checking…', ok: true });
+      validateWithGrok(word).then(info => {
+        setChecking(false);
+        if (info?.valid) {
+          addCustomWord(word);
+          acceptWord(word, [...foundWords, word]);
+        } else {
+          setShaking(true);
+          AudioEngine.play('wordWrong');
+          setFeedback({ msg: `"${word}" — not a word`, ok: false });
+          setTimeout(() => { setShaking(false); setFeedback(null); }, 2200);
+        }
+      }).catch(() => {
+        setChecking(false);
+        setShaking(true);
+        AudioEngine.play('wordWrong');
+        setFeedback({ msg: `"${word}" — not a word`, ok: false });
+        setTimeout(() => { setShaking(false); setFeedback(null); }, 2200);
+      });
     }
-  }, [builderTiles, currentWord, foundWords]);
+  }, [builderTiles, currentWord, foundWords, checking]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -392,7 +422,7 @@ export function PhonicsJourneyGame({ onBack }: Props) {
             >Clear</button>
             <button
               onClick={handleSubmit}
-              disabled={builderTiles.length < 2}
+              disabled={builderTiles.length < 2 || checking}
               style={{
                 flex: 3, padding: '11px 0', borderRadius: 11,
                 background: builderTiles.length >= 2
@@ -401,14 +431,42 @@ export function PhonicsJourneyGame({ onBack }: Props) {
                 border: `1.5px solid ${builderTiles.length >= 2 ? '#f0c060aa' : '#ffffff0a'}`,
                 color: builderTiles.length >= 2 ? '#f0c060' : '#ffffff22',
                 fontSize: 15, fontWeight: 800,
-                cursor: builderTiles.length >= 2 ? 'pointer' : 'default',
+                cursor: builderTiles.length >= 2 && !checking ? 'pointer' : 'default',
                 letterSpacing: '0.08em', transition: 'all 0.2s', outline: 'none',
+                opacity: checking ? 0.6 : 1,
               }}
-              onMouseEnter={e => { if (builderTiles.length >= 2) { e.currentTarget.style.background = 'linear-gradient(135deg, #f0c06055, #f0c06028)'; } }}
+              onMouseEnter={e => { if (builderTiles.length >= 2 && !checking) { e.currentTarget.style.background = 'linear-gradient(135deg, #f0c06055, #f0c06028)'; } }}
               onMouseLeave={e => { if (builderTiles.length >= 2) { e.currentTarget.style.background = 'linear-gradient(135deg, #f0c06033, #f0c06016)'; } }}
-            >Submit ↵</button>
+            >{checking ? 'Checking…' : 'Submit ↵'}</button>
           </div>
         </div>
+
+        {/* Word info card (Grok) */}
+        {wordInfo && wordInfo.phonetic && (
+          <div style={{
+            width: '100%',
+            background: 'linear-gradient(135deg, #f0c06010, #f0c06006)',
+            border: '1px solid #f0c06033',
+            borderRadius: 14,
+            padding: '14px 18px',
+            animation: 'pjSlideIn 0.35s ease',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: "'Noto Serif SC', serif", fontSize: 18, fontWeight: 900, color: '#f0c060' }}>{wordInfo.word}</span>
+              <span style={{ fontSize: 14, color: '#f0c06099', fontStyle: 'italic', letterSpacing: '0.04em' }}>{wordInfo.phonetic}</span>
+            </div>
+            {wordInfo.definition && (
+              <div style={{ fontSize: 13, color: '#ffffffaa', marginBottom: 5, lineHeight: 1.5 }}>
+                {wordInfo.definition}
+              </div>
+            )}
+            {wordInfo.example && (
+              <div style={{ fontSize: 12, color: '#ffffff55', fontStyle: 'italic', lineHeight: 1.5 }}>
+                "{wordInfo.example}"
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Found words */}
         <div style={{ width: '100%' }}>
