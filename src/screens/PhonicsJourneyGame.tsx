@@ -288,6 +288,14 @@ export function PhonicsJourneyGame({ onBack }: Props) {
     }
   }, [builderTiles, currentWord, foundWords, pendingWord, acceptWord]);
 
+  // Auto-submit when a valid word is built (mirrors endless mode behaviour)
+  useEffect(() => {
+    if (builderTiles.length < 2 || pendingWord || foundWords.includes(currentWord)) return;
+    if (!checkWordInSet(currentWord)) return;
+    const t = setTimeout(() => handleSubmit(), 320);
+    return () => clearTimeout(t);
+  }, [builderIds, pendingWord]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Enter') handleSubmit();
@@ -547,22 +555,23 @@ export function PhonicsJourneyGame({ onBack }: Props) {
                 fontSize: 13, cursor: 'pointer', transition: 'all 0.2s', outline: 'none',
               }}
             >Clear</button>
-            <button
-              onClick={handleSubmit}
-              disabled={builderTiles.length < 2 || !!pendingWord}
-              style={{
-                flex: 3, padding: '11px 0', borderRadius: 11,
-                background: builderTiles.length >= 2 && !pendingWord
-                  ? 'linear-gradient(135deg, #f0c06030, #f0c06014)' : 'none',
-                border: `1.5px solid ${builderTiles.length >= 2 && !pendingWord ? '#f0c060aa' : '#ffffff08'}`,
-                color: builderTiles.length >= 2 && !pendingWord ? '#f0c060' : '#ffffff22',
-                fontSize: 15, fontWeight: 800,
-                cursor: builderTiles.length >= 2 && !pendingWord ? 'pointer' : 'default',
-                letterSpacing: '0.08em', transition: 'all 0.2s', outline: 'none',
-              }}
-              onMouseEnter={e => { if (builderTiles.length >= 2 && !pendingWord) e.currentTarget.style.background = 'linear-gradient(135deg, #f0c06050, #f0c06028)'; }}
-              onMouseLeave={e => { if (builderTiles.length >= 2 && !pendingWord) e.currentTarget.style.background = 'linear-gradient(135deg, #f0c06030, #f0c06014)'; }}
-            >Submit ↵</button>
+            {/* Submit shown only when word is not in local dictionary (fallback for WordValidator) */}
+            {builderTiles.length >= 2 && !pendingWord && !checkWordInSet(currentWord) && (
+              <button
+                onClick={handleSubmit}
+                style={{
+                  flex: 3, padding: '11px 0', borderRadius: 11,
+                  background: 'linear-gradient(135deg, #f0c06030, #f0c06014)',
+                  border: '1.5px solid #f0c060aa',
+                  color: '#f0c060',
+                  fontSize: 15, fontWeight: 800,
+                  cursor: 'pointer',
+                  letterSpacing: '0.08em', transition: 'all 0.2s', outline: 'none',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'linear-gradient(135deg, #f0c06050, #f0c06028)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'linear-gradient(135deg, #f0c06030, #f0c06014)'; }}
+              >Submit ↵</button>
+            )}
           </div>
         </div>
 
